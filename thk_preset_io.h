@@ -349,8 +349,7 @@ inline bool ParsePresetFromText(const std::string& content,
                     return false;
                 }
             } else if (kLow == "f" || kLow == "file") {
-                if (vLow == "*" || vLow == "any") r.filter.thkFileIdx = -1;
-                else if (!ParseSignedIntStrict(vLow, r.filter.thkFileIdx)) {
+                if (!ParseIntList(vLow, r.filter.thkFiles, kMaxFilterItems, r.filter.thkFileCount)) {
                     outErr = "line " + std::to_string(lineNo) + ": bad file=" + val;
                     return false;
                 }

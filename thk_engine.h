@@ -105,14 +105,15 @@ constexpr std::size_t kMaxFilterItems = 8U;
 constexpr std::size_t kMaxRuleSteps   = 16U;
 
 struct ThkRuleFilter {
-    std::int32_t monsterId   = -1; // -1 = any
-    std::int32_t depth       = -1; // -1 = any
-    std::int32_t thkFileIdx  = -1; // -1 = any
-    std::uint8_t nodeCount   = 0U; // 0  = any node
+    std::int32_t monsterId    = -1; // -1 = any
+    std::int32_t depth        = -1; // -1 = any
+    std::uint8_t thkFileCount = 0U; // 0  = any file
+    std::int32_t thkFiles[kMaxFilterItems]{};
+    std::uint8_t nodeCount    = 0U; // 0  = any node
     std::int32_t nodes[kMaxFilterItems]{};
-    std::int32_t seg0Min     = -1; // -1 = unbounded
-    std::int32_t seg0Max     = -1; // -1 = unbounded
-    std::uint8_t callerCount = 0U; // 0  = any caller
+    std::int32_t seg0Min      = -1; // -1 = unbounded
+    std::int32_t seg0Max      = -1; // -1 = unbounded
+    std::uint8_t callerCount  = 0U; // 0  = any caller
     std::int32_t callers[kMaxFilterItems]{};
 };
 
@@ -465,7 +466,13 @@ struct ThkEngine {
     static bool MatchesFilter(const ThkRuleFilter& f, const ThkVmContext& lc) noexcept {
         if (f.monsterId >= 0 && lc.monsterId != static_cast<std::uint32_t>(f.monsterId)) return false;
         if (f.depth >= 0 && lc.depth != static_cast<std::uint32_t>(f.depth)) return false;
-        if (f.thkFileIdx >= 0 && lc.thkFileIdx != f.thkFileIdx) return false;
+        if (f.thkFileCount > 0U) {
+            bool hit = false;
+            for (std::uint8_t i = 0U; i < f.thkFileCount; ++i) {
+                if (f.thkFiles[i] == lc.thkFileIdx) { hit = true; break; }
+            }
+            if (!hit) return false;
+        }
         if (f.nodeCount > 0U) {
             bool hit = false;
             for (std::uint8_t i = 0U; i < f.nodeCount; ++i) {

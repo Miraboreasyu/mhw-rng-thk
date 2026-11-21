@@ -473,8 +473,10 @@ bool ParseCommonModifiers(int startIdx,
             if (vLow == "*" || vLow == "any") rule.filter.depth = -1;
             else if (!thk::ParseSignedIntStrict(vLow, rule.filter.depth)) { outErr = "无效 depth"; return false; }
         } else if (kLow == "f" || kLow == "file") {
-            if (vLow == "*" || vLow == "any") rule.filter.thkFileIdx = -1;
-            else if (!thk::ParseSignedIntStrict(vLow, rule.filter.thkFileIdx)) { outErr = "无效 file"; return false; }
+            if (!thk::ParseIntList(vLow, rule.filter.thkFiles, thk::kMaxFilterItems, rule.filter.thkFileCount)) {
+                outErr = "无效 file";
+                return false;
+            }
         } else if (kLow == "caller" || kLow == "callers") {
             if (!thk::ParseIntList(vLow, rule.filter.callers, thk::kMaxFilterItems, rule.filter.callerCount)) {
                 outErr = "无效 caller";
@@ -997,7 +999,7 @@ const MhwRngPluginDescriptor kPluginDesc = {
     kMhwRngApiVersion,
     "thk",
     u8"通用THK随机节点探测与纯RNG控招引擎",
-    "1.1.0",
+    "1.1.1",
     u8"探测任意怪物THK随机节点、记录出招次数，并支持计数门控、概率组合、序列与外部预设"
 };
 
