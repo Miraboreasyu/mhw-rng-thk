@@ -176,11 +176,21 @@ void __fastcall OnThkRandomDraw(const MhwRngDrawContext* ctx,
     }
 
     thk::ThkEvalDecision dec{};
+    thk::ThkPendingWeightedPick weighted{};
     bool needObserveVanilla = false;
     std::uint32_t nodeVisitNum = 0U;
     {
         std::lock_guard<std::mutex> lk(g_stateMx);
-        g_engine.EvaluateRulesLocked(lc, dec, needObserveVanilla, nodeVisitNum);
+        g_engine.EvaluateRulesLocked(lc, dec, weighted, needObserveVanilla, nodeVisitNum);
+    }
+
+    if (weighted.active) {
+        // Call DrawDeterministic strictly OUTSIDE `g_stateMx`!
+        const std::uint32_t rollU32 = (ctx && ctx->DrawDeterministic)
+                                          ? ctx->DrawDeterministic(thk::kRvaThkUpdateRandom, weighted.condId)
+                                          : 0U;
+        std::lock_guard<std::mutex> lk(g_stateMx);
+        g_engine.CommitWeightedPickLocked(lc, weighted, rollU32, dec, needObserveVanilla);
     }
 
     if (dec.shouldOverride) {
@@ -240,14 +250,21 @@ bool __fastcall FormatThkSlotStatus(const MhwRngSlotSnapshot* snap,
                           static_cast<unsigned long long>(ctrlCalls));
             return true;
         }
-        case 1011U: std::snprintf(outBuf, bufCap, u8"黑龙P1 <900 -> 孕吐(55:297)"); return true;
-        case 1012U: std::snprintf(outBuf, bufCap, u8"黑龙P1 孕吐 -> 不派生扇火(ENDR)"); return true;
-        case 1013U: std::snprintf(outBuf, bufCap, u8"黑龙P1 正面 -> 地毯火(55:184)"); return true;
-        case 1014U: std::snprintf(outBuf, bufCap, u8"黑龙P1 侧面 -> 侧地毯火(55:188)"); return true;
-        case 1015U: std::snprintf(outBuf, bufCap, u8"黑龙P1 背面 -> 2足甩尾(55:175)"); return true;
-        case 1016U: std::snprintf(outBuf, bufCap, u8"黑龙P1 远程/遮挡 -> 非扇地毯火"); return true;
-        case 1017U: std::snprintf(outBuf, bufCap, u8"黑龙P1 >4500 -> 火球"); return true;
+        case 1011U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足<900 -> 孕吐(55:297)"); return true;
+        case 1012U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足孕吐 -> 不派生扇火(ENDR)"); return true;
+        case 1013U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足正面 -> 地毯火(55:184)"); return true;
+        case 1014U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足侧面 -> 侧地毯火(55:188)"); return true;
+        case 1015U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足背面 -> 2足甩尾(55:175)"); return true;
+        case 1016U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足远程/遮挡 -> 非扇地毯火"); return true;
+        case 1017U: std::snprintf(outBuf, bufCap, u8"黑龙P1 2足>4500 -> 火球"); return true;
         case 1018U: std::snprintf(outBuf, bufCap, u8"黑龙P1 二足稳态守卫"); return true;
+        case 1021U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足<500未车 -> 蛇形咬(55:216)"); return true;
+        case 1022U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足<500已车 -> 后撤地毯火(55:277)"); return true;
+        case 1023U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足500~1500正面未车 -> 蛇形咬(55:216)"); return true;
+        case 1024U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足500~1500正面已车 -> 50/50蓄力火/后撤地毯"); return true;
+        case 1025U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足后方 -> 尾砸(55:176)"); return true;
+        case 1026U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足1500~5000/遮挡 -> 火球"); return true;
+        case 1027U: std::snprintf(outBuf, bufCap, u8"黑龙P1 4足>5000 -> 火球"); return true;
         default:
             if (snap->condId >= 2000U) {
                 std::snprintf(outBuf, bufCap, u8"THK 自定义规则/序列表#%u", snap->condId - 2000U);
@@ -529,12 +546,17 @@ void HandleRuleCmd(int argc, const char* const* argv) {
         }
         for (const auto& r : copy) {
             char firstTgt[32]{};
-            FormatSpecText(r.steps[0].primary, firstTgt, sizeof(firstTgt));
-            g_host->ChatPrintf(u8"[thk] #%u mon=%d node=%s seg0=[%d..%d] steps=%u(%s) min=%u max=%u",
+            if (r.steps[0].choiceCount > 0U) {
+                FormatSpecText(r.steps[0].choices[0].primary, firstTgt, sizeof(firstTgt));
+            } else {
+                std::snprintf(firstTgt, sizeof(firstTgt), "-");
+            }
+            g_host->ChatPrintf(u8"[thk] #%u mon=%d node=%s seg0=[%d..%d] steps=%u(%s%s) min=%u max=%u",
                                r.ruleId, r.filter.monsterId,
                                (r.filter.nodeCount > 0U ? std::to_string(r.filter.nodes[0]).c_str() : "*"),
                                r.filter.seg0Min, r.filter.seg0Max,
                                static_cast<unsigned>(r.stepCount), firstTgt,
+                               (r.steps[0].choiceCount > 1U ? "+..." : ""),
                                r.gate.minCount, r.gate.maxCount);
         }
         return;
@@ -832,10 +854,10 @@ void PrintFatalisStatus() {
             }
         }
     }
-    g_host->ChatPrintf(u8"[fatalis] 状态:%s | >4500火球:%s | P1二足守卫:%s | 累计控制:%llu次",
-                       en ? u8"已开启(预设 fatalis_p1_nasty)" : u8"已关闭(原版)",
-                       farMulti ? u8"三连火球(55:220)" : u8"单发火球(55:179)",
-                       guards ? u8"开(14/15/18/46/129~133)" : u8"关(仅75~79+55[87])",
+    g_host->ChatPrintf(u8"[fatalis] 状态:%s | 远程火球:%s | 倒地/遮挡守卫:%s | 累计控制:%llu次",
+                       en ? u8"已开启(P1二足+四足 presets/fatalis_p1_nasty)" : u8"已关闭(原版)",
+                       farMulti ? u8"三连火球(55:220/221)" : u8"单发火球(55:179/180)",
+                       guards ? u8"开(倒地衍生/遮挡/额外车)" : u8"关(仅主节点)",
                        static_cast<unsigned long long>(rolls));
     if (en && rolls == 0ULL && calls > 0ULL) {
         PrintThkDiag("fatalis");
@@ -906,7 +928,7 @@ void __fastcall Cmd_Fatalis(int argc, const char* const* argv, const char*, void
             return;
         }
         EnsureTakeoverOn();
-        g_host->ChatPrintf(u8"[fatalis] 已启用黑龙P1二足预设 (%zu条规则, 来源=%s)", cnt, src.c_str());
+        g_host->ChatPrintf(u8"[fatalis] 已启用黑龙P1全姿态预设 (%zu条规则, 来源=%s)", cnt, src.c_str());
         return;
     }
     if (a0 == "off" || a0 == "0" || a0 == "stop" || a0 == "disable" || a0 == "clear" || a0 == "reset") {
@@ -943,8 +965,8 @@ void __fastcall Cmd_Fatalis(int argc, const char* const* argv, const char*, void
             g_engine.SetTagDisabled("far_single", multi);
             g_engine.SetTagDisabled("far_multi", !multi);
         }
-        g_host->ChatPrint(multi ? u8"[fatalis] >4500 已设为: 三连火球(55:220)"
-                                : u8"[fatalis] >4500 已设为: 单发火球(55:179)");
+        g_host->ChatPrint(multi ? u8"[fatalis] 远程火球已设为: 三连火球(2足55:220 / 4足55:221)"
+                                : u8"[fatalis] 远程火球已设为: 单发火球(2足55:179 / 4足55:180)");
         return;
     }
     if (a0 == "guards" || a0 == "guard") {
@@ -963,8 +985,8 @@ void __fastcall Cmd_Fatalis(int argc, const char* const* argv, const char*, void
             g_fatalisGuards = on;
             g_engine.SetTagDisabled("guard", !on);
         }
-        g_host->ChatPrint(on ? u8"[fatalis] P1二足守卫已开启 (14/15/18/46/129~133)"
-                             : u8"[fatalis] P1二足守卫已关闭 (仅控制75~79与55[87])");
+        g_host->ChatPrint(on ? u8"[fatalis] P1倒地/遮挡/额外车守卫已开启 (46/47/18/129..167)"
+                             : u8"[fatalis] P1倒地/遮挡/额外车守卫已关闭 (仅控制主节点)");
         return;
     }
 
@@ -975,8 +997,8 @@ const MhwRngPluginDescriptor kPluginDesc = {
     kMhwRngApiVersion,
     "thk",
     u8"通用THK随机节点探测与纯RNG控招引擎",
-    "1.0.0",
-    u8"探测任意怪物THK随机节点、记录出招次数，并支持按计数/序列/外部预设进行纯RNG控招"
+    "1.1.0",
+    u8"探测任意怪物THK随机节点、记录出招次数，并支持计数门控、概率组合、序列与外部预设"
 };
 
 } // namespace

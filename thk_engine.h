@@ -45,9 +45,30 @@ struct ThkBranchSpec {
     }
 };
 
-struct ThkActionStep {
+constexpr std::size_t kMaxStepChoices = 8U;
+
+struct ThkWeightedChoice {
     ThkBranchSpec primary{};
     ThkBranchSpec fallback{};
+    float         weight = 1.0f;
+};
+
+struct ThkActionStep {
+    std::uint8_t      choiceCount = 0U;
+    ThkWeightedChoice choices[kMaxStepChoices]{};
+};
+
+struct ThkPendingWeightedPick {
+    bool          active      = false;
+    std::uint32_t ruleId      = 0U;
+    std::uint32_t condId      = 0U;
+    std::uint32_t stepIdx     = 0U;
+    std::uint32_t nodeVisit   = 0U;
+    char          ruleLabel[64]{};
+    std::uint8_t  optCount    = 0U;
+    std::int32_t  candIdx[kMaxStepChoices]{}; // >=0 candidate idx, or -2 for explicit `vanilla`
+    float         optWeight[kMaxStepChoices]{};
+    float         totalWeight = 0.0f;
 };
 
 enum class ThkCountScope : std::uint8_t {
@@ -557,11 +578,62 @@ struct ThkEngine {
                (probeMonsterFilter < 0 || monId == static_cast<std::uint32_t>(probeMonsterFilter));
     }
 
+    void RecordControlledDecisionLocked(MonsterRuntimeTracker& trk,
+                                        const ThkVmContext& lc,
+                                        std::uint32_t ruleId,
+                                        std::uint32_t condId,
+                                        std::uint32_t stepIdx,
+                                        std::uint32_t nodeVisitNum,
+                                        const char* ruleLabel,
+                                        std::size_t candIdx,
+                                        ThkEvalDecision& outDec) noexcept {
+        const std::uint32_t solvedU32 = SolveCandidateMidpointU32(lc, candIdx);
+        const std::int32_t  seg0      = (lc.candCount > 0U) ? lc.cands[0].segIdx : -1;
+
+        outDec.shouldOverride = true;
+        outDec.condId         = condId;
+        outDec.value0         = solvedU32;
+        ++diag.controlledCalls;
+
+        const auto& chosen = lc.cands[candIdx];
+        if (chosen.targetThkFile >= 0 && chosen.targetNodeId >= 0) {
+            trk.IncrementMoveHit(chosen.targetThkFile, chosen.targetNodeId, true);
+        }
+
+        ThkEventRecord rec{};
+        rec.valid            = true;
+        rec.wasControlled    = true;
+        rec.monsterId        = lc.monsterId;
+        rec.depth            = lc.depth;
+        rec.file             = lc.thkFileIdx;
+        rec.node             = lc.nodeArrIdx;
+        rec.seg0             = seg0;
+        rec.callerNode       = lc.callerNodeIdx;
+        rec.unwoundCaller    = lc.unwoundCallerNodeIdx;
+        rec.monsterDecisions = trk.totalDecisions;
+        rec.nodeVisitNum     = nodeVisitNum;
+        rec.ruleId           = ruleId;
+        rec.ruleStepIdx      = stepIdx;
+        rec.condId           = condId;
+        rec.chosenSegIdx     = chosen.segIdx;
+        rec.targetFile       = chosen.targetThkFile;
+        rec.targetNodeId     = chosen.targetNodeId;
+        rec.ctrlFlags        = chosen.ctrlFlags;
+        rec.chosenWeight     = chosen.weight;
+        rec.totalWeight      = lc.totalWeight;
+        rec.injectedU32      = solvedU32;
+        CopyTrunc(rec.ruleLabel, sizeof(rec.ruleLabel), ruleLabel);
+        BuildCandSummary(lc, rec.candSummary, sizeof(rec.candSummary));
+        PushEventRecord(rec, true);
+    }
+
     void EvaluateRulesLocked(const ThkVmContext& lc,
                              ThkEvalDecision& outDec,
+                             ThkPendingWeightedPick& outWeighted,
                              bool& outNeedObserveVanilla,
                              std::uint32_t& outNodeVisitNum) noexcept {
         outDec                = ThkEvalDecision{};
+        outWeighted           = ThkPendingWeightedPick{};
         outNeedObserveVanilla = false;
         outNodeVisitNum       = 0U;
         ++diag.enabledCalls;
@@ -606,58 +678,55 @@ struct ThkEngine {
                 }
 
                 const ThkActionStep& step = rule.steps[stepIdx];
-                std::int32_t resolved = ResolveSpec(step.primary, lc);
-                if (resolved == -1 && step.fallback.kind != ThkBranchSpec::Kind::kNone) {
-                    resolved = ResolveSpec(step.fallback, lc);
+                std::int32_t availCand[kMaxStepChoices]{};
+                float        availWt[kMaxStepChoices]{};
+                std::uint8_t availCnt = 0U;
+                float        sumWt    = 0.0f;
+
+                for (std::uint8_t c = 0U; c < step.choiceCount && c < kMaxStepChoices; ++c) {
+                    const ThkWeightedChoice& wc = step.choices[c];
+                    if (!(wc.weight > 0.0f)) continue;
+                    std::int32_t resolved = ResolveSpec(wc.primary, lc);
+                    if (resolved == -1 && wc.fallback.kind != ThkBranchSpec::Kind::kNone) {
+                        resolved = ResolveSpec(wc.fallback, lc);
+                    }
+                    if (resolved >= 0 || resolved == -2) {
+                        availCand[availCnt] = resolved;
+                        availWt[availCnt]   = wc.weight;
+                        sumWt += wc.weight;
+                        ++availCnt;
+                    }
                 }
 
-                if (resolved == -2) {
-                    // Explicit `vanilla` step inside sequence: advance sequence counter, let draw remain vanilla.
+                if (availCnt == 0U || !(sumWt > 0.0f)) continue;
+
+                if (availCnt == 1U) {
+                    if (availCand[0] == -2) {
+                        // Explicit `vanilla` step: advance sequence counter, let draw remain vanilla.
+                        if (rc) ++rc->firedCount;
+                        handledByVanillaRule = true;
+                        return false;
+                    }
                     if (rc) ++rc->firedCount;
-                    handledByVanillaRule = true;
-                    return false;
-                }
-                if (resolved < 0) continue;
-
-                const std::size_t candIdx = static_cast<std::size_t>(resolved);
-                if (rc) ++rc->firedCount;
-                const std::uint32_t solvedU32 = SolveCandidateMidpointU32(lc, candIdx);
-
-                outDec.shouldOverride = true;
-                outDec.condId         = rule.condId;
-                outDec.value0         = solvedU32;
-                ++diag.controlledCalls;
-
-                const auto& chosen = lc.cands[candIdx];
-                if (chosen.targetThkFile >= 0 && chosen.targetNodeId >= 0) {
-                    trk.IncrementMoveHit(chosen.targetThkFile, chosen.targetNodeId, true);
+                    RecordControlledDecisionLocked(trk, lc, rule.ruleId, rule.condId, stepIdx,
+                                                   outNodeVisitNum, rule.label,
+                                                   static_cast<std::size_t>(availCand[0]), outDec);
+                    return true;
                 }
 
-                ThkEventRecord rec{};
-                rec.valid            = true;
-                rec.wasControlled    = true;
-                rec.monsterId        = lc.monsterId;
-                rec.depth            = lc.depth;
-                rec.file             = lc.thkFileIdx;
-                rec.node             = lc.nodeArrIdx;
-                rec.seg0             = seg0;
-                rec.callerNode       = lc.callerNodeIdx;
-                rec.unwoundCaller    = lc.unwoundCallerNodeIdx;
-                rec.monsterDecisions = trk.totalDecisions;
-                rec.nodeVisitNum     = outNodeVisitNum;
-                rec.ruleId           = rule.ruleId;
-                rec.ruleStepIdx      = stepIdx;
-                rec.condId           = rule.condId;
-                rec.chosenSegIdx     = chosen.segIdx;
-                rec.targetFile       = chosen.targetThkFile;
-                rec.targetNodeId     = chosen.targetNodeId;
-                rec.ctrlFlags        = chosen.ctrlFlags;
-                rec.chosenWeight     = chosen.weight;
-                rec.totalWeight      = lc.totalWeight;
-                rec.injectedU32      = solvedU32;
-                CopyTrunc(rec.ruleLabel, sizeof(rec.ruleLabel), rule.label);
-                BuildCandSummary(lc, rec.candSummary, sizeof(rec.candSummary));
-                PushEventRecord(rec, true);
+                // Multi-choice weighted branch (`A(w1)+B(w2)`): defer deterministic roll until lock is released.
+                outWeighted.active      = true;
+                outWeighted.ruleId      = rule.ruleId;
+                outWeighted.condId      = rule.condId;
+                outWeighted.stepIdx     = stepIdx;
+                outWeighted.nodeVisit   = outNodeVisitNum;
+                outWeighted.optCount    = availCnt;
+                outWeighted.totalWeight = sumWt;
+                CopyTrunc(outWeighted.ruleLabel, sizeof(outWeighted.ruleLabel), rule.label);
+                for (std::uint8_t k = 0U; k < availCnt; ++k) {
+                    outWeighted.candIdx[k]   = availCand[k];
+                    outWeighted.optWeight[k] = availWt[k];
+                }
                 return true;
             }
             return false;
@@ -685,6 +754,44 @@ struct ThkEngine {
         diag.lastUnmatchCaller = lc.unwoundCallerNodeIdx;
         diag.lastUnmatchTFile  = (lc.candCount > 0U) ? lc.cands[0].targetThkFile : -1;
         diag.lastUnmatchTNode  = (lc.candCount > 0U) ? lc.cands[0].targetNodeId : -1;
+    }
+
+    void CommitWeightedPickLocked(const ThkVmContext& lc,
+                                  const ThkPendingWeightedPick& pick,
+                                  std::uint32_t rollU32,
+                                  ThkEvalDecision& outDec,
+                                  bool& outNeedObserveVanilla) noexcept {
+        outDec                = ThkEvalDecision{};
+        outNeedObserveVanilla = false;
+        if (!pick.active || pick.optCount == 0U || !(pick.totalWeight > 0.0f)) return;
+
+        const double target = (static_cast<double>(rollU32) / 4294967296.0) * static_cast<double>(pick.totalWeight);
+        double acc = 0.0;
+        std::size_t chosenOpt = static_cast<std::size_t>(pick.optCount - 1U);
+        for (std::uint8_t i = 0U; i < pick.optCount; ++i) {
+            const double w = static_cast<double>(pick.optWeight[i]);
+            if (acc <= target && target < acc + w) {
+                chosenOpt = i;
+                break;
+            }
+            acc += w;
+        }
+
+        MonsterRuntimeTracker& trk = TouchTracker(lc.monsterPtr, lc.monsterId);
+        if (RuleCounterEntry* rc = trk.GetOrCreateRuleCounter(pick.ruleId)) {
+            ++rc->firedCount;
+        }
+
+        const std::int32_t resolved = pick.candIdx[chosenOpt];
+        if (resolved == -2) {
+            outNeedObserveVanilla = ShouldProbeMonster(lc.monsterId) || AnyActiveRuleNeedsNaturalMoves();
+            return;
+        }
+        if (resolved >= 0) {
+            RecordControlledDecisionLocked(trk, lc, pick.ruleId, pick.condId, pick.stepIdx,
+                                           pick.nodeVisit, pick.ruleLabel,
+                                           static_cast<std::size_t>(resolved), outDec);
+        }
     }
 
     void RecordObservedVanillaLocked(const ThkVmContext& lc,

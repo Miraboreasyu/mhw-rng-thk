@@ -1,44 +1,79 @@
 # ============================================================================
-# Declarative Preset: Fatalis Phase 1 Bipedal Pure-RNG Control
+# Declarative Preset: Fatalis Phase 1 Full Nasty (Bipedal + Quadruped)
 # Loaded by `rng_thk.dll` (`$rng thk preset load fatalis_p1_nasty` or `$rng fatalis on`)
 # Edit rules freely and hot-reload in game with `$rng thk preset reload`.
 # ============================================================================
 name = fatalis_p1_nasty
-desc = 黑龙(em013)一阶段二足全距离纯RNG控制预设
-disable_tag = far_multi
+desc = 黑龙(em013)一阶段二足+四足全距离纯RNG控制预设
+disable_tag = far_multi,bipedal_lock
 
-# 1. Close range (<900): nodes 75/76 (+ knockdown follow-up clones 129/130) -> 55:297 Under-Breath
-rule mon=101 d=0 f=0 node=75,76 seg0=* -> 55:297 cond=1011 label="P1 <900 孕吐"
-rule mon=101 d=0 f=0 node=129,130 seg0=* -> 55:297 cond=1011 tag=guard label="P1 倒后<900 孕吐"
+# === Phase 1 二足 (Bipedal) ===
+# 1. Close range (<900): nodes 75/76 (+ knockdown follow-up clones 129/130) -> 55:297 孕吐
+rule mon=101 d=0 f=0 node=75,76 seg0=* -> 55:297 cond=1011 label="P1 2足<900 孕吐"
+rule mon=101 d=0 f=0 node=129,130 seg0=* -> 55:297 cond=1011 tag=guard label="P1 2足倒后<900 孕吐"
 
 # 2. Suppress 35% cone follow-up inside `55[87]` only when entered from Phase 1 under-breath callers
-rule mon=101 d=1 f=55 node=87 caller=75,76 seg0=* -> ENDR cond=1012 label="P1 孕吐不派生扇火"
-rule mon=101 d=1 f=55 node=87 caller=129,130 seg0=* -> ENDR cond=1012 tag=guard label="P1 倒后孕吐不派生扇火"
+rule mon=101 d=1 f=55 node=87 caller=75,76 seg0=* -> ENDR cond=1012 label="P1 2足孕吐不派生扇火"
+rule mon=101 d=1 f=55 node=87 caller=129,130 seg0=* -> ENDR cond=1012 tag=guard label="P1 2足倒后孕吐不派生扇火"
 
 # 3. Mid/Long range (900~2000): node 77 (+ guard clone 131)
-rule mon=101 d=0 f=0 node=77 seg0=1 -> 55:184 cond=1013 label="P1 900~2000 正面地毯火"
-rule mon=101 d=0 f=0 node=131 seg0=1 -> 55:184 cond=1013 tag=guard label="P1 倒后900~2000 正面地毯火"
+rule mon=101 d=0 f=0 node=77 seg0=1 -> 55:184 cond=1013 label="P1 2足900~2000 正面地毯火"
+rule mon=101 d=0 f=0 node=131 seg0=1 -> 55:184 cond=1013 tag=guard label="P1 2足倒后900~2000 正面地毯火"
 
-rule mon=101 d=0 f=0 node=77 seg0=13 -> 55:175 cond=1015 label="P1 900~2000 背面甩尾"
-rule mon=101 d=0 f=0 node=131 seg0=12 -> 55:175 cond=1015 tag=guard label="P1 倒后900~2000 背面甩尾"
+rule mon=101 d=0 f=0 node=77 seg0=13 -> 55:175 cond=1015 label="P1 2足900~2000 背面甩尾"
+rule mon=101 d=0 f=0 node=131 seg0=12 -> 55:175 cond=1015 tag=guard label="P1 2足倒后900~2000 背面甩尾"
 
-rule mon=101 d=0 f=0 node=77 seg0=25+ -> 55:188 cond=1014 label="P1 900~2000 侧面地毯火"
-rule mon=101 d=0 f=0 node=131 seg0=25+ -> 55:188 cond=1014 tag=guard label="P1 倒后900~2000 侧面地毯火"
+rule mon=101 d=0 f=0 node=77 seg0=25+ -> 55:188 cond=1014 label="P1 2足900~2000 侧面地毯火"
+rule mon=101 d=0 f=0 node=131 seg0=25+ -> 55:188 cond=1014 tag=guard label="P1 2足倒后900~2000 侧面地毯火"
 
 # 4. Extra-Long range (2000~4500): node 78 (+ guard clone 132) -> 55:184 (front/back) or 55:188 (side)
-rule mon=101 d=0 f=0 node=78 seg0=* -> 55:184|55:188 cond=1016 label="P1 2000~4500 地毯火"
-rule mon=101 d=0 f=0 node=132 seg0=* -> 55:184|55:188 cond=1016 tag=guard label="P1 倒后2000~4500 地毯火"
+rule mon=101 d=0 f=0 node=78 seg0=* -> 55:184|55:188 cond=1016 label="P1 2足2000~4500 地毯火"
+rule mon=101 d=0 f=0 node=132 seg0=* -> 55:184|55:188 cond=1016 tag=guard label="P1 2足倒后2000~4500 地毯火"
 
 # 5. Ultra-Long range (>4500): node 79 (+ guard clone 133) -> 55:179 (single) / 55:220 (multi)
-rule mon=101 d=0 f=0 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="P1 >4500 单发火球"
-rule mon=101 d=0 f=0 node=133 seg0=* -> 55:179 cond=1017 tag=guard,far_single label="P1 倒后>4500 单发火球"
-rule mon=101 d=0 f=0 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 >4500 三连火球"
-rule mon=101 d=0 f=0 node=133 seg0=* -> 55:220 cond=1017 tag=guard,far_multi label="P1 倒后>4500 三连火球"
+rule mon=101 d=0 f=0 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="P1 2足>4500 单发火球"
+rule mon=101 d=0 f=0 node=133 seg0=* -> 55:179 cond=1017 tag=guard,far_single label="P1 2足倒后>4500 单发火球"
+rule mon=101 d=0 f=0 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 2足>4500 三连火球"
+rule mon=101 d=0 f=0 node=133 seg0=* -> 55:220 cond=1017 tag=guard,far_multi label="P1 2足倒后>4500 三连火球"
 
-# 6. Optional Phase 1 bipedal stability guards (toggled via tag `guard` / `$rng fatalis guards on|off`)
-rule mon=101 d=0 f=0 node=46 seg0=53+ -> 55:184|55:188 cond=1016 tag=guard label="P1 遮挡补偿地毯火"
+# 6. Bipedal auxiliary guards & optional bipedal stance lock (`tag=bipedal_lock`, disabled by default)
+rule mon=101 d=0 f=0 node=46 seg0=53+ -> 55:184|55:188 cond=1016 tag=guard label="P1 2足遮挡补偿地毯火"
 rule mon=101 d=0 f=0 node=18 seg0=7 -> ENDR cond=1018 tag=guard label="P1 跳过15%额外龙车"
-rule mon=101 d=0 f=0 node=14 seg0=22 -> ENDR cond=1018 tag=guard label="P1 维持二足态(51612)"
-rule mon=101 d=0 f=0 node=15 seg0=14 -> ENDR cond=1018 tag=guard label="P1 维持二足态(51613)"
-rule mon=101 d=0 f=0 node=14 seg0=49 -> RANDOM cond=1018 tag=guard label="P1 加快站立回二足(51612)"
-rule mon=101 d=0 f=0 node=15 seg0=41 -> RANDOM cond=1018 tag=guard label="P1 加快站立回二足(51613)"
+rule mon=101 d=0 f=0 node=14 seg0=22 -> ENDR cond=1018 tag=bipedal_lock label="P1 维持二足态(51612)"
+rule mon=101 d=0 f=0 node=15 seg0=14 -> ENDR cond=1018 tag=bipedal_lock label="P1 维持二足态(51613)"
+rule mon=101 d=0 f=0 node=14 seg0=49 -> RANDOM cond=1018 tag=bipedal_lock label="P1 加快站立回二足(51612)"
+rule mon=101 d=0 f=0 node=15 seg0=41 -> RANDOM cond=1018 tag=bipedal_lock label="P1 加快站立回二足(51613)"
+
+# === Phase 1 四足 (Quadruped) ===
+# 1. 近距离 (0,500): 未出蛇形咬 -> 55:216 蛇形咬; 已出蛇形咬 -> 55:277 后撤地毯火
+rule mon=101 d=0 f=0 node=104 seg0=* -> 55:216 cond=1021 label="P1 4足(0~500未车) 蛇形咬"
+rule mon=101 d=0 f=0 node=158 seg0=* -> 55:216 cond=1021 tag=guard label="P1 4足倒后(0~500未车) 蛇形咬"
+rule mon=101 d=0 f=0 node=109 seg0=* -> 55:277 cond=1022 label="P1 4足(0~500已车) 后撤地毯火"
+rule mon=101 d=0 f=0 node=163 seg0=* -> 55:277 cond=1022 tag=guard label="P1 4足倒后(0~500已车) 后撤地毯火"
+
+# 2. 四足后方优先: (500,1500) 所有后方/后侧扇区含 55:176(尾砸)，前半球不含，置前优先锁定尾砸
+rule mon=101 d=0 f=0 node=105,106,110,111 seg0=* -> 55:176 cond=1025 label="P1 4足后方 尾砸"
+rule mon=101 d=0 f=0 node=159,160,164,165 seg0=* -> 55:176 cond=1025 tag=guard label="P1 4足倒后后方 尾砸"
+
+# 3. 中近/中远 (500,1500) 正面 (无尾砸的扇区自动落入此处):
+#    未出蛇形咬 -> 55:216 蛇形咬; 已出蛇形咬 -> 50/50 蓄力火(55:217) 或 后撤地毯火(55:277)
+rule mon=101 d=0 f=0 node=105,106 seg0=* -> 55:216 cond=1023 label="P1 4足(500~1500正面未车) 蛇形咬"
+rule mon=101 d=0 f=0 node=159,160 seg0=* -> 55:216 cond=1023 tag=guard label="P1 4足倒后(500~1500未车) 蛇形咬"
+rule mon=101 d=0 f=0 node=110,111 seg0=* -> 55:217(50)+55:277(50) cond=1024 label="P1 4足(500~1500正面已车) 蓄力火/后撤地毯"
+rule mon=101 d=0 f=0 node=164,165 seg0=* -> 55:217(50)+55:277(50) cond=1024 tag=guard label="P1 4足倒后(500~1500已车) 蓄力火/后撤地毯"
+
+# 4. 远距离 (1500,5000) 含后方(无尾砸): 只出火球 (55:180 单发 / 55:221 三连)
+rule mon=101 d=0 f=0 node=107,112 seg0=* -> 55:180 cond=1026 tag=far_single label="P1 4足(1500~5000) 单发火球"
+rule mon=101 d=0 f=0 node=161,166 seg0=* -> 55:180 cond=1026 tag=guard,far_single label="P1 4足倒后(1500~5000) 单发火球"
+rule mon=101 d=0 f=0 node=107,112 seg0=* -> 55:221 cond=1026 tag=far_multi label="P1 4足(1500~5000) 三连火球"
+rule mon=101 d=0 f=0 node=161,166 seg0=* -> 55:221 cond=1026 tag=guard,far_multi label="P1 4足倒后(1500~5000) 三连火球"
+
+# 5. 超远距离 (>5000) 含后方(无尾砸): 只出火球 (55:180 单发 / 55:221 三连)
+rule mon=101 d=0 f=0 node=108,113 seg0=* -> 55:180 cond=1027 tag=far_single label="P1 4足(>5000) 单发火球"
+rule mon=101 d=0 f=0 node=162,167 seg0=* -> 55:180 cond=1027 tag=guard,far_single label="P1 4足倒后(>5000) 单发火球"
+rule mon=101 d=0 f=0 node=108,113 seg0=* -> 55:221 cond=1027 tag=far_multi label="P1 4足(>5000) 三连火球"
+rule mon=101 d=0 f=0 node=162,167 seg0=* -> 55:221 cond=1027 tag=guard,far_multi label="P1 4足倒后(>5000) 三连火球"
+
+# 6. 四足 P1 遮挡补偿 (`arrIdx=47`, `seg0=2..23` 严格仅限 P1, P2>=26/P3>=51 不动)
+rule mon=101 d=0 f=0 node=47 seg0=2..23 -> 55:180 cond=1026 tag=guard,far_single label="P1 4足遮挡补偿 单发火球"
+rule mon=101 d=0 f=0 node=47 seg0=2..23 -> 55:221 cond=1026 tag=guard,far_multi label="P1 4足遮挡补偿 三连火球"

@@ -133,14 +133,48 @@ inline bool ParseBranchSpec(const std::string& raw, ThkBranchSpec& out) {
     return false;
 }
 
+inline bool ParseWeightedChoiceItem(const std::string& rawItem, ThkWeightedChoice& outChoice) {
+    outChoice = ThkWeightedChoice{};
+    std::string item = TrimAscii(rawItem);
+    if (item.empty()) return false;
+
+    float w = 1.0f;
+    if (item.back() == ')') {
+        const std::size_t lp = item.rfind('(');
+        if (lp != std::string::npos && lp > 0U && lp + 1U < item.size() - 1U) {
+            const std::string wStr = TrimAscii(item.substr(lp + 1U, item.size() - lp - 2U));
+            char* endp = nullptr;
+            const double parsed = std::strtod(wStr.c_str(), &endp);
+            if (endp == wStr.c_str() || *endp != '\0' || !std::isfinite(parsed) || !(parsed > 0.0)) {
+                return false;
+            }
+            w = static_cast<float>(parsed);
+            item = TrimAscii(item.substr(0U, lp));
+        }
+    }
+
+    outChoice.weight = w;
+    const std::size_t bar = item.find('|');
+    if (bar == std::string::npos) {
+        return ParseBranchSpec(item, outChoice.primary);
+    }
+    return ParseBranchSpec(item.substr(0U, bar), outChoice.primary) &&
+           ParseBranchSpec(item.substr(bar + 1U), outChoice.fallback);
+}
+
 inline bool ParseActionStep(const std::string& raw, ThkActionStep& out) {
     out = ThkActionStep{};
-    const std::size_t bar = raw.find('|');
-    if (bar == std::string::npos) {
-        return ParseBranchSpec(raw, out.primary);
+    std::size_t pos = 0U;
+    while (pos <= raw.size()) {
+        const std::size_t plus = raw.find('+', pos);
+        const std::string item = TrimAscii(plus == std::string::npos ? raw.substr(pos) : raw.substr(pos, plus - pos));
+        if (item.empty() || out.choiceCount >= kMaxStepChoices) return false;
+        if (!ParseWeightedChoiceItem(item, out.choices[out.choiceCount])) return false;
+        ++out.choiceCount;
+        if (plus == std::string::npos) break;
+        pos = plus + 1U;
     }
-    return ParseBranchSpec(raw.substr(0U, bar), out.primary) &&
-           ParseBranchSpec(raw.substr(bar + 1U), out.fallback);
+    return out.choiceCount > 0U;
 }
 
 inline bool ParseSequenceSteps(const std::string& raw, ThkRule& rule) {

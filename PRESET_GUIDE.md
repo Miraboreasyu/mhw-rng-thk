@@ -73,11 +73,14 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
 
 使用 `-> <步骤序列>`（等价别名 `seq=<步骤序列>` 或 `target=<步骤序列>`），多个步骤之间用**英文逗号 `,`** 分隔（最多 **16 步**）。
 
-每个步骤支持 `主目标` 或 `主目标|备用回退`（当主目标在当前候选表中不存在或权重为 `0` 时自动尝试备选）：
+每个步骤支持两种组合符号：
+- **加权概率组合 `+`**：写成 `A+B`（等权 50/50）或 `A(w1)+B(w2)`（例如 `55:217(50)+55:277(50)`），最多 **8 项**。引擎会使用微内核 `mhw_rng` 分配给该规则 `CondID` 的独立确定性 RNG 流按权重抽选，并在选中 `A` 或 `B` 后再反算 `u32`；当前候选表中不存在或权重为 `0` 的选项会被自动剔除后再按剩余权重归一化。
+- **备选回退 `|`** ：写成 `主目标|备选`（如 `55:184|55:188`），支持嵌套在 `+` 的每一项内部（例如 `55:184|55:188(70)+55:297(30)`）。
 
 | 目标写法 | 示例 | 匹配行为 |
 | :--- | :--- | :--- |
 | `<file>:<nodeId>` | `55:297`、`55:184\|55:188` | 匹配 `targetThkFile == file && targetNodeId == nodeId` 的候选（自动穿透 1-hop 局部封装跳转） |
+| `A(w1)+B(w2)` | `55:217(50)+55:277(50)` | 按权重 `w1:w2` 从可行分枝中纯 RNG 随机抽取其一后再锁定 |
 | `ENDR` / `RANDOM` / `ELSER` | `ENDR`、`RANDOM` | 匹配控制标记为对应类型（`0x80` / `0x40` / `0xC0`）且权重 `> 0` 的候选 |
 | `seg:<段号>` | `seg:10` | 直接选中指定节点内 `segIdx == 段号` 的候选 |
 | `cand:<序号>` | `cand:0` | 直接选中候选数组 `mgr + 0x40` 中的第 `<序号>` 项（从 `0` 开始） |
@@ -215,17 +218,21 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172 every=3:0 label="每3次触发1次"
 rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:297 when=move:55:172 min=2 label="出满2次后变招"
 ```
 
-#### 模板 5：用 `tag` 与 `disable_tag` 管理可选分支（黑龙预设写法拆解）
+#### 模板 5：按概率组合拆分（`A(w1)+B(w2)`）与 `tag` 分组（黑龙预设示例拆解）
 参考 [presets/fatalis_p1_nasty.txt](presets/fatalis_p1_nasty.txt)：
 ```ini
-disable_tag = far_multi
+disable_tag = far_multi,bipedal_lock
 
 # 1. `d=1 caller=...` 精确抑制特定招式下的随机派生：仅当由 75/76 唤起 55[87] 时选 ENDR
-rule mon=101 d=1 f=55 node=87 caller=75,76 seg0=* -> ENDR cond=1012 label="P1 孕吐不派生扇火"
+rule mon=101 d=1 f=55 node=87 caller=75,76 seg0=* -> ENDR cond=1012 label="P1 2足孕吐不派生扇火"
 
-# 2. 通过互斥标签让 `$rng thk preset tag far_multi on` / `$rng fatalis far multi` 即时切换方案
-rule mon=101 d=0 f=0 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="P1 >4500 单发火球"
-rule mon=101 d=0 f=0 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 >4500 三连火球"
+# 2. 四足后方优先：所有含 55:176(尾砸) 的扇区排最前，不含的前半扇区自动跳过并匹配下方规则
+rule mon=101 d=0 f=0 node=105,106,110,111 seg0=* -> 55:176 cond=1025 label="P1 4足后方 尾砸"
+rule mon=101 d=0 f=0 node=110,111 seg0=* -> 55:217(50)+55:277(50) cond=1024 label="P1 4足正面50/50 蓄力火/后撤地毯"
+
+# 3. 通过互斥标签让 `$rng thk preset tag far_multi on` / `$rng fatalis far multi` 即时切换方案
+rule mon=101 d=0 f=0 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="P1 2足>4500 单发火球"
+rule mon=101 d=0 f=0 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 2足>4500 三连火球"
 ```
 
 ---
