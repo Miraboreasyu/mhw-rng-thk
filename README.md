@@ -7,6 +7,7 @@
   - [thk_preset_io.h](thk_preset_io.h)：声明式纯文本预设解析器（`thk_presets/*.txt`）
   - [thk_plugin.cpp](thk_plugin.cpp)：插件入口、`$rng thk` 通用指令与 `$rng fatalis` 预设快捷入口
   - [presets/fatalis_p1_nasty.txt](presets/fatalis_p1_nasty.txt)：黑龙一阶段二足预设（内置兜底文本 [presets/fatalis_p1_nasty.h](presets/fatalis_p1_nasty.h)）
+  - [PRESET_GUIDE.md](PRESET_GUIDE.md)：`.txt` 声明式预设完整语法手册与新怪物编写实战指南
 - **宿主依赖**：`mhw_rng.dll`（Plugin SDK `kMhwRngApiVersion == 2`，头文件 [mhw_rng_api.h](include/mhw_rng_api.h)）
 - **接管调用点**：`RVA 0x1339C8C`（`cThinkMgr::updateThk` @ `0x141339640` 内唯一的 `CALL MtRandom::nrand`）
 
@@ -72,7 +73,7 @@ flowchart LR
 
 ## 三、预设文件语法（`thk_presets/*.txt`）
 
-预设文件为纯 UTF-8 文本，以 `#` 开头为注释：
+预设文件为纯 UTF-8 文本，以 `#` 开头为注释。完整语法字段（过滤、`seg0` 区间、备选回退、计数门控、序列模式与 4 步新怪物探测编写流程）请直接查阅专门指南：[**PRESET_GUIDE.md**](PRESET_GUIDE.md)。
 
 ```ini
 name = example_preset
