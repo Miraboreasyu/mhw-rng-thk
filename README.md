@@ -6,9 +6,9 @@
   - [thk_engine.h](thk_engine.h)：任意节点探测、单只怪物计数、计数条件门控（`CountGate`）与有序出招序列引擎
   - [thk_preset_io.h](thk_preset_io.h)：声明式纯文本预设解析器（`thk_presets/*.txt`）
   - [thk_plugin.cpp](thk_plugin.cpp)：插件入口、`$rng thk` 通用指令与 `$rng fatalis` 预设快捷入口
-  - [presets/fatalis_p1_nasty.txt](presets/fatalis_p1_nasty.txt)：黑龙一阶段二足预设（内置兜底文本 [presets/fatalis_p1_nasty.h](presets/fatalis_p1_nasty.h)）
-  - [PRESET_GUIDE.md](PRESET_GUIDE.md)：`.txt` 声明式预设完整语法手册与新怪物编写实战指南
-- **宿主依赖**：`mhw_rng.dll`（Plugin SDK `kMhwRngApiVersion == 2`，头文件 [mhw_rng_api.h](include/mhw_rng_api.h)）
+  - [presets/fatalis_p1_nasty.txt](presets/fatalis_p1_nasty.txt)：黑龙一阶段二足与四足预设（覆盖怒前 `f=0` 与怒后 `f=4`，内置兜底文本 [presets/fatalis_p1_nasty.h](presets/fatalis_p1_nasty.h)）
+  - [PRESET_GUIDE.md](PRESET_GUIDE.md)：`.txt` 声明式预设语法手册与新怪物预设编写指南
+- **宿主依赖**：`mhw_rng.dll`（Plugin SDK `kMhwRngApiVersion == 3`，头文件 [mhw_rng_api.h](include/mhw_rng_api.h)）
 - **接管调用点**：`RVA 0x1339C8C`（`cThinkMgr::updateThk` @ `0x141339640` 内唯一的 `CALL MtRandom::nrand`）
 
 本文档说明 `rng_thk` 如何将底层 THK 随机节点探测、计数与序列控招能力与具体怪物预设完全解耦，全程不安装额外游戏 Hook、不修改 `.thk` 脚本、不写入游戏 AI 内存。
@@ -89,11 +89,11 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=once label="示例两连
 ## 四、独立仓库目录与构建部署
 
 - `thk_vm.h` / `thk_engine.h` / `thk_preset_io.h` / `thk_plugin.cpp`：通用 THK 引擎源码
-- `presets/fatalis_p1_nasty.txt` 与 `presets/fatalis_p1_nasty.h`：黑龙 P1 二足声明式预设与内置文本兜底
-- `include/mhw_rng_api.h`：Plugin SDK v2 头文件本地副本（通过 `sync_sdk.bat` 同步）
-- `build.bat`：编译 `build\rng_thk.dll`（`--deploy` 会同时部署 `rng_thk.dll`、`thk_presets\fatalis_p1_nasty.txt`，并清理旧版 `rng_fatalis.dll` 以避免同挂 `0x1339C8C` 冲突）
+- `presets/fatalis_p1_nasty.txt` 与 `presets/fatalis_p1_nasty.h`：黑龙 P1 二足与四足声明式预设与内置文本兜底
+- `include/mhw_rng_api.h`：Plugin SDK v3 头文件本地副本（通过 `sync_sdk.bat` 同步）
+- `build.bat`：编译 `build\rng_thk.dll`（`--deploy` 会同时部署 `rng_thk.dll`、`thk_presets\fatalis_p1_nasty.txt`，并清理已被 `rng_thk` 取代的旧版 `rng_fatalis.dll`，避免对 `0x1339C8C` 产生重复控制）
 
 ```bat
-sync_sdk.bat D:\path\to\mhw-rng
+sync_sdk.bat <path-to-mhw-rng>
 build.bat --deploy
 ```

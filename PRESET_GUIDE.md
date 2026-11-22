@@ -1,6 +1,6 @@
 # THK 声明式预设（`.txt`）语法与编写指南
 
-本文档面向开发者与进阶玩家，详细说明 [`rng_thk.dll`](README.md) 外部纯文本预设文件（`thk_presets/*.txt`）的完整语法、匹配与计数规则、以及从零探测怪物 THK 节点并编写自定义预设的实战方法。
+本文档说明 [`rng_thk.dll`](README.md) 外部纯文本预设文件（`thk_presets/*.txt`）的语法规范、匹配与计数规则，以及探测怪物 THK 节点并编写自定义预设的流程。
 
 ---
 
@@ -9,7 +9,7 @@
 1. **存放目录与编码**：
    - 将预设放在游戏目录 `nativePC\plugins\mhw_rng\thk_presets\<预设名>.txt`（例如 `thk_presets\fatalis_p1_nasty.txt`）。
    - 必须使用 **UTF-8（无 BOM）** 编码，扩展名必须为 `.txt`。
-2. **游戏内零重启热调试命令**：
+2. **游戏内热加载与调试命令**：
    - `$rng thk preset list`：列出 `thk_presets\` 下全部 `.txt` 预设与内置预设。
    - `$rng thk preset load <预设名>`：加载预设并自动开启总接管（不需要带 `.txt` 后缀）。
    - `$rng thk preset reload`：修改 `.txt` 并保存后立即热重读当前预设，**无需重编 DLL 或重启游戏**。
@@ -38,7 +38,7 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
    - `name = <字符串>`：预设名称（若省略则取文件名）。
    - `desc = <字符串>`（别名 `description`）：一句话描述。
    - `disable_tag = <t1,t2,...>`（别名 `disable_tags`）：加载本预设时**默认禁用**的规则标签列表（全小写、逗号分隔）。
-3. **规则行（核心限制：每个字段 `=` 两侧绝对不能有空格）**：
+3. **规则行（语法限制：每个 `key=value` 字段的 `=` 两侧不能有空格）**：
    - 必须以 `rule ` 开头，由空格分隔多个参数块：
      `rule [过滤条件...] -> <目标或序列> [步进与计数条件...] [tag=...] [label="..."]`
    - 正确写法：`mon=101 d=0 node=75,76 label="P1 <900 孕吐"`
@@ -103,7 +103,7 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
 | `vanilla` / `pass` / `skip` / `-` | `55:185,vanilla,55:297` | 序列表内的**显式原版透传步**：消耗本步但不篡改本次抽签，直接放行给原版随机 |
 
 > [!IMPORTANT]
-> 纯 RNG 控招无法选中**当前候选表中不存在**或**原版权重 `<= 0`** 的分枝。如果某步的主目标与备用回退在当前候选表中都找不到，该规则本次**不会强行生效**，引擎将继续向下尝试下一条规则。
+> 纯 RNG 控招无法选中**当前候选表中不存在**或**原版权重 `<= 0`** 的分枝。如果某步的主目标与备用回退在当前候选表中都找不到，该规则本次**不会生效**，引擎将继续向下尝试下一条规则。
 
 ---
 
@@ -113,7 +113,7 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
 
 | 键名 | 可选值 | 默认值 | 说明 |
 | :--- | :--- | :---: | :--- |
-| `end` | `loop` / `hold` / `once`（别名 `vanilla`） | `loop` | `loop`：播完从第 0 步循环；`hold`：播完停留在最后一步；`once`：播完一遍后彻底退回原版随机 |
+| `end` | `loop` / `hold` / `once`（别名 `vanilla`） | `loop` | `loop`：播完从第 0 步循环；`hold`：播完停留在最后一步；`once`：播完一遍后退回原版随机 |
 | `scope` | `fired`（别名 `rule`） / `node` / `total` | `fired` | `fired`：本规则实际触发才前进 1 步；`node`：按当前 `(d,f,node,seg0)` 节点访问次数 `nodeVisitNum - 1` 取步；`total`：按该怪物总决策次数 `totalDecisions - 1` 取步 |
 
 ---
@@ -163,9 +163,9 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
 
 ---
 
-## 五、从零编写新怪物预设的 4 步实战工作流
+## 五、编写新怪物预设的工作流
 
-假设你想为一个未知怪物（例如 `MonsterID = 91` 金狮子）定制出招，不必先去反编译或静态分析 `.thk`：
+为未知怪物（例如 `MonsterID = 91` 金狮子）定制出招时，无需预先静态分析 `.thk`：
 
 ### 第 1 步：游戏内开启实时探针
 在聊天框输入：
@@ -178,12 +178,12 @@ $rng thk nodes 91
 $rng thk probe log
 ```
 
-### 第 2 步：看懂一条 `probe log` 并直接翻译成 `rule`
+### 第 2 步：解析 `probe log` 输出并编写 `rule`
 假设 `$rng thk probe log` 输出其中一行：
 ```text
 #1[原] em=91 #42 d=0 f=0 node=12(n#18) seg0=1 cal=-1 -> 55:297 | [55:172(30),55:185(30),55:297(40)]
 ```
-这一行已经包含了写 `rule` 所需的一切字段：
+这一行包含了编写 `rule` 所需的全部字段：
 
 | 日志片段 | 含义 | 对应的 `rule` 写法 |
 | :--- | :--- | :--- |
@@ -191,31 +191,31 @@ $rng thk probe log
 | `d=0 f=0 node=12` | 调用深度 `0`、文件 `0`、节点 `12` | `d=0 f=0 node=12` |
 | `seg0=1` | 本次分支扇区的起始段编号 | `seg0=1`（若该节点其他距离也共用可按需改 `*`） |
 | `cal=-1` | 调用者节点（仅 `d=1` 时有效，如 `cal=75`） | `d=1` 且只想限某前驱招式时写 `caller=75` |
-| `[55:172(30),55:185(30),55:297(40)]` | 本节点当前全部可选招式及权重 | 从中挑选你想锁定的 `55:172` / `55:185` / `55:297` |
+| `[55:172(30),55:185(30),55:297(40)]` | 本节点当前全部可选招式及权重 | 从中选择目标动作 `55:172` / `55:185` / `55:297` |
 
-于是立刻就能写出一条规则：
+据此可写出如下规则：
 ```ini
 rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185,55:297 end=loop label="三招循环"
 ```
 
 ### 第 3 步：保存并热重载调试
-将文件存为 `nativePC\plugins\mhw_rng\thk_presets\rajang_test.txt`，游戏内依次输入：
+将文件存为 `nativePC\plugins\mhw_rng\thk_presets\rajang_test.txt`，游戏内输入：
 ```text
 $rng thk preset load rajang_test
 ```
-之后每次改动 `.txt` 只需输入 `$rng thk preset reload`；再用 `$rng thk stats 91` 或 `$rng thk diag` 观察实际命中情况与未命中日志即可。
+之后每次改动 `.txt` 只需输入 `$rng thk preset reload`；再用 `$rng thk stats 91` 或 `$rng thk diag` 观察实际命中情况与未命中日志。
 
-### 第 4 步：5 个可直接复用的实战模板 + 黑龙预设示例对照
+### 第 4 步：常用规则模板与黑龙预设示例
 
 #### 模板 1：按 `seg0` 区分方位扇区，并设置备选回退
 ```ini
-rule mon=101 d=0 f=0 node=77 seg0=1 -> 55:184 label="正面优先地毯火"
-rule mon=101 d=0 f=0 node=78 seg0=* -> 55:184|55:188 label="无184时退而选188"
+rule mon=101 d=0 f=0,4 node=77 seg0=1 -> 55:184 label="正面优先地毯火"
+rule mon=101 d=0 f=0,4 node=78 seg0=* -> 55:184|55:188 label="无184时退而选188"
 ```
 
-#### 模板 2：固定开场连招剧本，随后交还原版（`end=once` + `vanilla`）
+#### 模板 2：固定开场连招序列，随后退回原版随机（`end=once` + `vanilla`）
 ```ini
-# 第1次进node=12强出55:172 -> 第2次放原版一次 -> 第3次强出55:297 -> 第4次起永久恢复原版
+# 第1次进node=12强出55:172 -> 第2次放原版一次 -> 第3次强出55:297 -> 第4次起恢复原版
 rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,vanilla,55:297 end=once label="开场固定脚本"
 ```
 
@@ -234,7 +234,7 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172 every=3:0 label="每3次触发1次"
 rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:297 when=move:55:172 min=2 label="出满2次后变招"
 ```
 
-#### 模板 5：按概率组合拆分（`A(w1)+B(w2)`）与 `tag` 分组（黑龙预设示例拆解）
+#### 模板 5：按概率组合拆分（`A(w1)+B(w2)`）与 `tag` 分组（黑龙预设示例）
 参考 [presets/fatalis_p1_nasty.txt](presets/fatalis_p1_nasty.txt)：
 ```ini
 disable_tag = far_multi,bipedal_lock
@@ -242,27 +242,27 @@ disable_tag = far_multi,bipedal_lock
 # 1. `d=1 caller=...` 精确抑制特定招式下的随机派生：仅当由 75/76 唤起 55[87] 时选 ENDR
 rule mon=101 d=1 f=55 node=87 caller=75,76 seg0=* -> ENDR cond=1012 label="P1 2足孕吐不派生扇火"
 
-# 2. 四足后方优先：所有含 55:176(尾砸) 的扇区排最前，不含的前半扇区自动跳过并匹配下方规则
-rule mon=101 d=0 f=0 node=105,106,110,111 seg0=* -> 55:176 cond=1025 label="P1 4足后方 尾砸"
-rule mon=101 d=0 f=0 node=110,111 seg0=* -> 55:217(50)+55:277(50) cond=1024 label="P1 4足正面50/50 蓄力火/后撤地毯"
+# 2. 四足后方优先：含 55:176(尾砸) 的后方扇区排最前，不含的前半扇区跳过并匹配下方规则
+rule mon=101 d=0 f=0,4 node=105,106,110,111 seg0=* -> 55:176 cond=1025 label="P1 4足后方 尾砸"
+rule mon=101 d=0 f=0,4 node=110,111 seg0=* -> 55:217(50)+55:277(50) cond=1024 label="P1 4足正面50/50 蓄力火/后撤地毯"
 
-# 3. 通过互斥标签让 `$rng thk preset tag far_multi on` / `$rng fatalis far multi` 即时切换方案
-rule mon=101 d=0 f=0 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="P1 2足>4500 单发火球"
-rule mon=101 d=0 f=0 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 2足>4500 三连火球"
+# 3. 通过互斥标签让 `$rng thk preset tag far_multi on` / `$rng fatalis far multi` 切换方案
+rule mon=101 d=0 f=0,4 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="P1 2足>4500 单发火球"
+rule mon=101 d=0 f=0,4 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 2足>4500 三连火球"
 ```
 
 ---
 
-## 六、硬性上限与常见排查清单
+## 六、静态上限与排查清单
 
 1. **静态数组上限**（受限于无堆分配实时回调设计）：
-   - 单条规则最多 `8` 个 `node`、`8` 个 `caller`、`16` 个序列步骤。
+   - 单条规则最多 `8` 个 `f`（文件槽位）、`8` 个 `node`、`8` 个 `caller`、`16` 个序列步骤，每个步骤最多 `8` 个加权选项。
    - 单只活跃怪物最多同时记录 `64` 种不同 `(d,f,node,seg0)` 节点、`64` 种招式 `file:node` 与 `64` 条规则计数；全局最多保留 `8` 个并发怪物实例槽。
 2. **常见错误与现象排查**：
-   - **加载报 `expected key=value` 或 `unknown key`**：检查 `rule` 行内部是否在 `=` 两侧多写了空格，或者 `label=...` 含空格却忘了英文双引号 `"`，或使用了中文全角引号。
+   - **加载报 `expected key=value` 或 `unknown key`**：检查 `rule` 行内部是否在 `=` 两侧多写了空格，或者 `label=...` 含空格却遗漏英文双引号 `"`，或使用了中文全角引号。
    - **中文 `desc`/`label` 聊天框乱码**：文件需保存为 **UTF-8 无 BOM** 格式。
    - **规则写了却从不触发**：
      1. 输入 `$rng thk diag` 查看最近一次未命中的 `(mon, d, f, node, seg0, caller, tgt0)`，核对实际 `seg0` 与预设是否一致（很多怪物同一个 `node` 按距离/角度拆出了多个不同的起始段 `seg0`）。
      2. 确认目标招式在当前候选表中是否存在且**权重大于 `0`**（权重为 `0` 的分枝原版也不会抽中，需要靠备选 `A|B` 兜底）。
-     3. 若文件上方已有另一条 `node` 相同的规则总是先匹配成功，会把下方同节点规则截胡；把范围更窄、带次数门控或特殊标签的规则写在**更靠前的位置**。
-   - **`presets/fatalis_p1_nasty.txt` 找不到时会怎样**：`fatalis_p1_nasty` 在插件内留有一份完全同格式的内置兜底文本，但自定义其它名称的预设必须真实存在于 `nativePC\plugins\mhw_rng\thk_presets\` 下。
+     3. 若文件上方已有另一条 `node` 相同的规则先匹配生效，导致下方同节点规则不会执行；应将范围更窄、带次数门控或特定标签的规则写在**更靠前的位置**。
+   - **`presets/fatalis_p1_nasty.txt` 找不到时会怎样**：`fatalis_p1_nasty` 在插件内留有一份同格式的内置兜底文本，自定义其它名称的预设则必须存在于 `nativePC\plugins\mhw_rng\thk_presets\` 下。
