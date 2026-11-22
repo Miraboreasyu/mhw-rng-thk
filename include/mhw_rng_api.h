@@ -29,7 +29,8 @@ constexpr MhwRngHookHandle kMhwRngInvalidHandle  = 0U;
 enum MhwRngEngineMode : std::uint32_t {
     kMhwRngModeOff         = 0U, // Pure vanilla RNG, zero-overhead fast bypass
     kMhwRngModeObserveOnly = 1U, // Calls vanilla RNG for all draws, updates counters/lastValue & fires observers
-    kMhwRngModeTakeover    = 2U  // Full deterministic microkernel takeover + pre/post/filter hooks
+    kMhwRngModeTakeover    = 2U, // Full deterministic microkernel takeover for all slots + pre/post/filter hooks
+    kMhwRngModeSelective   = 3U  // Selective takeover: only hooked/overridden slots are intercepted; untouched sites run pure vanilla RNG
 };
 
 enum MhwRngSlotMode : std::uint8_t {
@@ -394,6 +395,8 @@ using MhwRngPluginShutdownFn = void(__cdecl*)();
 // ============================================================================
 MHW_RNG_API std::uint32_t        MhwRng_GetApiVersion();
 MHW_RNG_API const MhwRngHostApi* MhwRng_GetHostApi();
+// IsTakeoverEnabled() returns true for both kMhwRngModeTakeover and kMhwRngModeSelective;
+// SetTakeoverEnabled(true) keeps Takeover/Selective if active or enters kMhwRngModeSelective.
 MHW_RNG_API void                 MhwRng_SetTakeoverEnabled(bool enabled);
 MHW_RNG_API bool                 MhwRng_IsTakeoverEnabled();
 MHW_RNG_API void                 MhwRng_SetEngineMode(std::uint32_t mode);
