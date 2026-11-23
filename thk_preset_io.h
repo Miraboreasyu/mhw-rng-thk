@@ -18,6 +18,7 @@ namespace thk {
 struct ThkPresetDocument {
     std::string              name{};
     std::string              desc{};
+    std::string              descEn{};
     std::vector<std::string> defaultDisabledTags{};
     std::vector<ThkRule>     rules{};
 };
@@ -293,6 +294,7 @@ inline bool ParsePresetFromText(const std::string& content,
             const std::string v = TrimAscii(trimmed.substr(eq + 1U));
             if (k == "name") { outDoc.name = v; continue; }
             if (k == "desc" || k == "description") { outDoc.desc = v; continue; }
+            if (k == "desc_en" || k == "description_en") { outDoc.descEn = v; continue; }
             if (k == "disable_tag" || k == "disable_tags") {
                 std::size_t p = 0U;
                 while (p <= v.size()) {
@@ -392,6 +394,8 @@ inline bool ParsePresetFromText(const std::string& content,
                 CopyTrunc(r.tags, sizeof(r.tags), vLow.c_str());
             } else if (kLow == "label") {
                 CopyTrunc(r.label, sizeof(r.label), val.c_str());
+            } else if (kLow == "label_en") {
+                CopyTrunc(r.labelEn, sizeof(r.labelEn), val.c_str());
             } else if (!ParseGateKeyVal(kLow, val, r.gate)) {
                 outErr = "line " + std::to_string(lineNo) + ": unknown key '" + kLow + "'";
                 return false;

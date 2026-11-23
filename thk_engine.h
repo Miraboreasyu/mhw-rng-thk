@@ -65,6 +65,7 @@ struct ThkPendingWeightedPick {
     std::uint32_t stepIdx     = 0U;
     std::uint32_t nodeVisit   = 0U;
     char          ruleLabel[64]{};
+    char          ruleLabelEn[64]{};
     std::uint8_t  optCount    = 0U;
     std::int32_t  candIdx[kMaxStepChoices]{}; // >=0 candidate idx, or -2 for explicit `vanilla`
     float         optWeight[kMaxStepChoices]{};
@@ -127,8 +128,9 @@ struct ThkRule {
     ThkSeqEndMode seqEnd    = ThkSeqEndMode::kLoop;
     std::uint8_t  stepCount = 0U;
     ThkActionStep steps[kMaxRuleSteps]{};
-    char          tags[64]{};  // Comma-separated lowercase tags (e.g. "guard,far_single")
-    char          label[64]{}; // Optional human-readable description
+    char          tags[64]{};   // Comma-separated lowercase tags (e.g. "guard,far_single")
+    char          label[64]{};  // Optional human-readable description
+    char          labelEn[64]{};// Optional English human-readable description
 };
 
 struct NodeVisitEntry {
@@ -262,6 +264,7 @@ struct ThkEventRecord {
     float         totalWeight      = 0.0f;
     std::uint32_t injectedU32      = 0U;
     char          ruleLabel[64]{};
+    char          ruleLabelEn[64]{};
     char          candSummary[96]{};
 };
 
@@ -346,6 +349,7 @@ struct ThkEngine {
 
     std::string              activePresetName{};
     std::string              activePresetDesc{};
+    std::string              activePresetDescEn{};
     std::string              activePresetSource{};
     std::vector<ThkRule>     presetRules{};
     std::vector<std::string> disabledTags{};
@@ -592,6 +596,7 @@ struct ThkEngine {
                                         std::uint32_t stepIdx,
                                         std::uint32_t nodeVisitNum,
                                         const char* ruleLabel,
+                                        const char* ruleLabelEn,
                                         std::size_t candIdx,
                                         ThkEvalDecision& outDec) noexcept {
         const std::uint32_t solvedU32 = SolveCandidateMidpointU32(lc, candIdx);
@@ -630,6 +635,7 @@ struct ThkEngine {
         rec.totalWeight      = lc.totalWeight;
         rec.injectedU32      = solvedU32;
         CopyTrunc(rec.ruleLabel, sizeof(rec.ruleLabel), ruleLabel);
+        CopyTrunc(rec.ruleLabelEn, sizeof(rec.ruleLabelEn), ruleLabelEn);
         BuildCandSummary(lc, rec.candSummary, sizeof(rec.candSummary));
         PushEventRecord(rec, true);
     }
@@ -716,7 +722,7 @@ struct ThkEngine {
                     }
                     if (rc) ++rc->firedCount;
                     RecordControlledDecisionLocked(trk, lc, rule.ruleId, rule.condId, stepIdx,
-                                                   outNodeVisitNum, rule.label,
+                                                   outNodeVisitNum, rule.label, rule.labelEn,
                                                    static_cast<std::size_t>(availCand[0]), outDec);
                     return true;
                 }
@@ -730,6 +736,7 @@ struct ThkEngine {
                 outWeighted.optCount    = availCnt;
                 outWeighted.totalWeight = sumWt;
                 CopyTrunc(outWeighted.ruleLabel, sizeof(outWeighted.ruleLabel), rule.label);
+                CopyTrunc(outWeighted.ruleLabelEn, sizeof(outWeighted.ruleLabelEn), rule.labelEn);
                 for (std::uint8_t k = 0U; k < availCnt; ++k) {
                     outWeighted.candIdx[k]   = availCand[k];
                     outWeighted.optWeight[k] = availWt[k];
@@ -796,7 +803,7 @@ struct ThkEngine {
         }
         if (resolved >= 0) {
             RecordControlledDecisionLocked(trk, lc, pick.ruleId, pick.condId, pick.stepIdx,
-                                           pick.nodeVisit, pick.ruleLabel,
+                                           pick.nodeVisit, pick.ruleLabel, pick.ruleLabelEn,
                                            static_cast<std::size_t>(resolved), outDec);
         }
     }

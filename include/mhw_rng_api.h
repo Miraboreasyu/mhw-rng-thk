@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-//  MHW Universal RNG Microkernel & Plugin SDK — Public C/C++ API (v3.0)
+//  MHW Universal RNG Microkernel & Plugin SDK — Public C/C++ API (v3.3)
 //  Core Module : nativePC\plugins\mhw_rng.dll
 //  Plugin Dir  : nativePC\plugins\mhw_rng\*.dll (Shadow-Copy Hot-Reloadable!)
 //  Target Game : Monster Hunter World: Iceborne 15.23 (Steam build 15539686)
@@ -73,14 +73,16 @@ enum MhwRngHookAction : std::uint32_t {
     kMhwRngActionContinue        = 3, // Explicitly pass control to next hook in chain
     kMhwRngActionClaimCondition  = 4, // Commit `condId` (even 0) and stop pre-chain immediately
     kMhwRngActionFilterVanilla   = 5, // Execute vanilla RNG now, then invoke this hook's `postFn` with `CanModify`
-    kMhwRngActionReturnFloatBits = 6  // For Mt19937Range: bit-cast `value0` directly as IEEE-754 float return
+    kMhwRngActionReturnFloatBits = 6, // For Mt19937Range: bit-cast `value0` directly as IEEE-754 float return
+    kMhwRngActionFilterSlot      = 7  // Step target slot normally, then invoke this hook's `postFn` with `CanModify`
 };
 
 enum MhwRngHookFlags : std::uint32_t {
     kMhwRngHookPre           = 1U << 0,
     kMhwRngHookPost          = 1U << 1,
     kMhwRngHookObserveOnly   = 1U << 2, // Receive `postFn` notifications even in kMhwRngModeObserveOnly
-    kMhwRngHookFilterVanilla = 1U << 3  // Even without preFn, run vanilla RNG and call `postFn` with `CanModify`
+    kMhwRngHookFilterVanilla = 1U << 3, // Even without preFn, run vanilla RNG and call `postFn` with `CanModify`
+    kMhwRngHookFilterSlot    = 1U << 4  // Step target slot normally and call `postFn` with `CanModify`
 };
 
 enum MhwRngDrawFlags : std::uint32_t {
@@ -94,15 +96,25 @@ enum MhwRngDrawFlags : std::uint32_t {
     kMhwRngDrawFlagHasVanilla         = 1U << 7,
     kMhwRngDrawFlagCanModify          = 1U << 8,
     kMhwRngDrawFlagBypassed           = 1U << 9,
-    kMhwRngDrawFlagOverridden         = 1U << 10
+    kMhwRngDrawFlagOverridden         = 1U << 10,
+    kMhwRngDrawFlagHasXmmRegs         = 1U << 11
 };
 
 enum MhwRngLifecycleEvent : std::uint32_t {
-    kMhwRngEventEpochReset    = 1U,
-    kMhwRngEventMasterSeed    = 2U,
-    kMhwRngEventEngineMode    = 3U,
-    kMhwRngEventClearAllRules = 4U,
-    kMhwRngEventStateRestored = 5U
+    kMhwRngEventEpochReset      = 1U,
+    kMhwRngEventMasterSeed      = 2U,
+    kMhwRngEventEngineMode      = 3U,
+    kMhwRngEventClearAllRules   = 4U,
+    kMhwRngEventStateRestored   = 5U,
+    kMhwRngEventLanguageChanged = 6U
+};
+
+enum MhwRngLangId : std::uint32_t {
+    kMhwRngLangZh    = 0U,
+    kMhwRngLangEn    = 1U,
+    kMhwRngLangJa    = 2U,
+    kMhwRngLangKo    = 3U,
+    kMhwRngLangOther = 255U
 };
 
 enum MhwRngInstancePolicy : std::uint32_t {
@@ -120,6 +132,13 @@ enum MhwRngRestoreFlags : std::uint32_t {
 };
 
 #pragma pack(push, 8)
+union MhwRngXmmReg {
+    float         f32[4];
+    double        f64[2];
+    std::uint32_t u32[4];
+    std::uint64_t u64[2];
+};
+
 // Captured atomically by MASM x64 entry thunks (`src/rng_trampolines.asm`)
 // DO NOT reorder fields without updating `rng_trampolines.asm`!
 struct MhwRngCallerRegs {
@@ -133,7 +152,10 @@ struct MhwRngCallerRegs {
     std::uint64_t  r15;       // +0x38
     std::uintptr_t callerRsp; // +0x40 (Exact entry RSP == _AddressOfReturnAddress())
     std::uintptr_t callerRip; // +0x48 (Raw *returnAddrSlot)
-    std::uint64_t  reserved;  // +0x50
+    std::uint64_t  reserved;  // +0x50 (sizeof(MhwRngCallerRegs) == 0x80 on v3.2+)
+    std::uint64_t  reserved2; // +0x58 (16B alignment pad)
+    MhwRngXmmReg   xmm6;      // +0x60 (Non-volatile XMM6 at RNG entry; check kMhwRngDrawFlagHasXmmRegs)
+    MhwRngXmmReg   xmm7;      // +0x70 (Non-volatile XMM7 at RNG entry; check kMhwRngDrawFlagHasXmmRegs)
 };
 
 struct MhwRngSlotSnapshot {
@@ -246,7 +268,12 @@ struct MhwRngEventInfo {
     std::uint32_t engineMode;    // MhwRngEngineMode
     std::uint64_t masterSeed;
     std::uint64_t epoch;
-    std::uint64_t prevValue;     // Previous epoch / seed / mode depending on eventKind
+    std::uint64_t prevValue;     // Previous epoch / seed / mode / langId depending on eventKind
+};
+
+struct MhwRngLocaleText {
+    const char* lang;            // Primary BCP-47 tag, e.g. "zh", "en", "ja", "ko"
+    const char* text;            // UTF-8 localized text
 };
 #pragma pack(pop)
 
@@ -254,6 +281,24 @@ using MhwRngSubcommandFn = void(__fastcall*)(
     int                      argc,      // Token count AFTER `<subcmd>` (argv[0] is first arg after subcmd)
     const char* const*       argv,
     const char*              rawArgStr, // Raw trimmed string after `<subcmd>`
+    void*                    userData);
+
+using MhwRngCompletionSinkFn = void(__fastcall*)(
+    const char*              candidateUtf8,
+    void*                    sinkContext);
+
+// `subcmd`  : lowercase registered subcommand name (e.g. "size", "steam", "thk", "fix")
+// `argc`    : number of completed tokens AFTER `<subcmd>` (`0` = completing 1st arg after `<subcmd>`)
+// `argv`    : `argc` completed tokens after `<subcmd>`
+// `prefix`  : current partial token under cursor (never null; may be `""`)
+// `addCand` : callback to emit candidate tokens (host performs case-insensitive prefix filtering, dedup & sort)
+using MhwRngSubcommandCompleteFn = void(__fastcall*)(
+    const char*              subcmd,
+    int                      argc,
+    const char* const*       argv,
+    const char*              prefix,
+    MhwRngCompletionSinkFn   addCand,
+    void*                    sinkCtx,
     void*                    userData);
 
 using MhwRngMetaResolverFn = bool(__fastcall*)(
@@ -351,7 +396,7 @@ struct MhwRngHostApi {
     void          (__fastcall *ChatPrintAsync)(const char* utf8Text);
     void          (__cdecl    *ChatPrintfAsync)(const char* fmt, ...);
 
-    // 3-State Engine Mode (Off / ObserveOnly / Takeover)
+    // 4-State Engine Mode (Off / ObserveOnly / Takeover / Selective)
     void          (__fastcall *SetEngineMode)(std::uint32_t mode);
     std::uint32_t (__fastcall *GetEngineMode)();
 
@@ -382,8 +427,279 @@ struct MhwRngHostApi {
                                                              std::uint32_t wrapperRetRva,
                                                              std::uint16_t frameQwords);
     void          (__fastcall *UnregisterTransparentWrapper)(MhwRngPluginId selfId, std::uint32_t wrapperRetRva);
+
+    // ---- v3.1 Extensions (check `structSize` before calling on older hosts) ----
+    const char*   (__fastcall *GetLanguage)();                          // Returns canonical tag ("zh", "en", "ja", ...)
+    bool          (__fastcall *ExecuteCommand)(const char* commandLine); // Executes single command (up to 1024B)
+
+    // ---- v3.2 Extensions (check `structSize` or use `MhwRng_HostCaptureCallerRvas`) ----
+    // Unwinds caller return RVAs via Windows x64 `.pdata` (`RtlLookupFunctionEntry` + `RtlVirtualUnwind`)
+    // with SEH protection and zero heap allocation.
+    // `outRvas[0]` is the innermost direct in-module return RVA, `outRvas[1]` is its caller, etc.
+    // Returns the number of RVAs written (up to `maxDepth`, capped at 32).
+    std::uint32_t (__fastcall *CaptureCallerRvas)(const MhwRngDrawContext* ctx,
+                                                  std::uint32_t* outRvas,
+                                                  std::uint32_t maxDepth);
+
+    // ---- v3.3 Standardized i18n Extensions (check `structSize` or use `MhwRng_Tr*` / `MhwRng_Register*Bi`) ----
+    // Resolves localized text from `entries[0..count-1]` using deterministic fallback:
+    //   active language -> "en" -> "zh" -> first non-empty entry -> fallbackText -> "" (never null).
+    const char*   (__fastcall *SelectText)(const MhwRngLocaleText* entries,
+                                           std::size_t count,
+                                           const char* fallbackText);
+    bool          (__fastcall *RegisterPluginInfoI18n)(MhwRngPluginId selfId,
+                                                       const MhwRngLocaleText* displayNames,
+                                                       std::size_t displayCount,
+                                                       const MhwRngLocaleText* descriptions,
+                                                       std::size_t descCount);
+    bool          (__fastcall *RegisterSubcommandI18n)(MhwRngPluginId selfId,
+                                                       const char* subcmd,
+                                                       const char* usageExample,
+                                                       const MhwRngLocaleText* helpTexts,
+                                                       std::size_t helpCount,
+                                                       MhwRngSubcommandFn fn,
+                                                       void* userData);
+    bool          (__fastcall *RegisterSiteMetaI18n)(MhwRngPluginId selfId,
+                                                     std::uint32_t rva,
+                                                     const char* shortAlias,
+                                                     const MhwRngLocaleText* descriptions,
+                                                     std::size_t descCount,
+                                                     MhwRngValueFormatterFn formatterOrNull,
+                                                     void* userData);
+
+    // ---- v3.4 Subcommand Tab-Completion Extension (check `structSize` or use `MhwRng_RegisterSubcommandCompleter`) ----
+    bool          (__fastcall *RegisterSubcommandCompleter)(MhwRngPluginId selfId,
+                                                            const char* subcmd,
+                                                            MhwRngSubcommandCompleteFn completer,
+                                                            void* userData);
 };
 #pragma pack(pop)
+
+inline const char* MhwRng_HostGetLanguage(const MhwRngHostApi* host) noexcept {
+    if (!host) return "zh";
+    if (host->structSize < offsetof(MhwRngHostApi, GetLanguage) + sizeof(host->GetLanguage)) return "zh";
+    if (!host->GetLanguage) return "zh";
+    const char* lang = host->GetLanguage();
+    return (lang && lang[0] != '\0') ? lang : "zh";
+}
+
+inline void MhwRng_ExtractCanonicalPrimary(const char* raw, char outPrimary[12]) noexcept {
+    outPrimary[0] = '\0';
+    if (!raw) return;
+    while (*raw == ' ' || *raw == '\t') ++raw;
+    std::size_t len = 0U;
+    while (len < 11U && raw[len] != '\0' && raw[len] != '-' && raw[len] != '_' &&
+           raw[len] != ' ' && raw[len] != '\t') {
+        char c = raw[len];
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A'));
+        outPrimary[len++] = c;
+    }
+    outPrimary[len] = '\0';
+    auto eq = [&](const char* lit) noexcept {
+        std::size_t i = 0U;
+        while (outPrimary[i] != '\0' && lit[i] != '\0') {
+            if (outPrimary[i] != lit[i]) return false;
+            ++i;
+        }
+        return outPrimary[i] == '\0' && lit[i] == '\0';
+    };
+    if (eq("cn") || eq("chs") || eq("cht") || eq("chinese")) {
+        outPrimary[0] = 'z'; outPrimary[1] = 'h'; outPrimary[2] = '\0';
+    } else if (eq("eng") || eq("english")) {
+        outPrimary[0] = 'e'; outPrimary[1] = 'n'; outPrimary[2] = '\0';
+    } else if (eq("jp") || eq("jpn") || eq("japanese")) {
+        outPrimary[0] = 'j'; outPrimary[1] = 'a'; outPrimary[2] = '\0';
+    } else if (eq("kr") || eq("kor") || eq("korean")) {
+        outPrimary[0] = 'k'; outPrimary[1] = 'o'; outPrimary[2] = '\0';
+    }
+}
+
+inline bool MhwRng_LangMatchesPrimary(const char* a, const char* b) noexcept {
+    char pa[12]{}, pb[12]{};
+    MhwRng_ExtractCanonicalPrimary(a, pa);
+    MhwRng_ExtractCanonicalPrimary(b, pb);
+    if (pa[0] == '\0' || pb[0] == '\0') return false;
+    std::size_t i = 0U;
+    while (pa[i] != '\0' && pb[i] != '\0') {
+        if (pa[i] != pb[i]) return false;
+        ++i;
+    }
+    return pa[i] == '\0' && pb[i] == '\0';
+}
+
+inline bool MhwRng_HostIsEnglish(const MhwRngHostApi* host) noexcept {
+    const char* lang = MhwRng_HostGetLanguage(host);
+    return !MhwRng_LangMatchesPrimary(lang, "zh");
+}
+
+inline const char* MhwRng_SelectTextFallback(const char* activeLang,
+                                             const MhwRngLocaleText* entries,
+                                             std::size_t count,
+                                             const char* fallbackText) noexcept {
+    if (entries && count > 0U) {
+        const char* cur = (activeLang && activeLang[0] != '\0') ? activeLang : "zh";
+        for (std::size_t i = 0U; i < count; ++i) {
+            if (entries[i].text && entries[i].text[0] != '\0' &&
+                MhwRng_LangMatchesPrimary(entries[i].lang, cur)) {
+                return entries[i].text;
+            }
+        }
+        if (!MhwRng_LangMatchesPrimary(cur, "en")) {
+            for (std::size_t i = 0U; i < count; ++i) {
+                if (entries[i].text && entries[i].text[0] != '\0' &&
+                    MhwRng_LangMatchesPrimary(entries[i].lang, "en")) {
+                    return entries[i].text;
+                }
+            }
+        }
+        if (!MhwRng_LangMatchesPrimary(cur, "zh")) {
+            for (std::size_t i = 0U; i < count; ++i) {
+                if (entries[i].text && entries[i].text[0] != '\0' &&
+                    MhwRng_LangMatchesPrimary(entries[i].lang, "zh")) {
+                    return entries[i].text;
+                }
+            }
+        }
+        for (std::size_t i = 0U; i < count; ++i) {
+            if (entries[i].text && entries[i].text[0] != '\0') {
+                return entries[i].text;
+            }
+        }
+    }
+    return fallbackText ? fallbackText : "";
+}
+
+inline const char* MhwRng_TrTable(const MhwRngHostApi* host,
+                                  const MhwRngLocaleText* entries,
+                                  std::size_t count,
+                                  const char* fallbackText = "") noexcept {
+    if (host &&
+        host->structSize >= offsetof(MhwRngHostApi, SelectText) + sizeof(host->SelectText) &&
+        host->SelectText) {
+        const char* res = host->SelectText(entries, count, fallbackText);
+        if (res) return res;
+    }
+    return MhwRng_SelectTextFallback(MhwRng_HostGetLanguage(host), entries, count, fallbackText);
+}
+
+inline const char* MhwRng_Tr(const MhwRngHostApi* host,
+                             const char* zhUtf8,
+                             const char* enUtf8) noexcept {
+    const MhwRngLocaleText pair[2] = {
+        { "zh", zhUtf8 },
+        { "en", enUtf8 }
+    };
+    const char* fb = (zhUtf8 && zhUtf8[0] != '\0') ? zhUtf8 : (enUtf8 ? enUtf8 : "");
+    return MhwRng_TrTable(host, pair, 2U, fb);
+}
+
+inline bool MhwRng_RegisterPluginInfoI18n(const MhwRngHostApi* host,
+                                          MhwRngPluginId selfId,
+                                          const MhwRngLocaleText* displayNames,
+                                          std::size_t displayCount,
+                                          const MhwRngLocaleText* descriptions,
+                                          std::size_t descCount) noexcept {
+    if (!host) return false;
+    if (host->structSize < offsetof(MhwRngHostApi, RegisterPluginInfoI18n) + sizeof(host->RegisterPluginInfoI18n)) {
+        return false;
+    }
+    if (!host->RegisterPluginInfoI18n) return false;
+    return host->RegisterPluginInfoI18n(selfId, displayNames, displayCount, descriptions, descCount);
+}
+
+inline bool MhwRng_RegisterPluginInfoBi(const MhwRngHostApi* host,
+                                        MhwRngPluginId selfId,
+                                        const char* zhDisplayName,
+                                        const char* enDisplayName,
+                                        const char* zhDescription,
+                                        const char* enDescription) noexcept {
+    const MhwRngLocaleText names[2] = { { "zh", zhDisplayName }, { "en", enDisplayName } };
+    const MhwRngLocaleText descs[2] = { { "zh", zhDescription }, { "en", enDescription } };
+    return MhwRng_RegisterPluginInfoI18n(host, selfId, names, 2U, descs, 2U);
+}
+
+inline bool MhwRng_RegisterSubcommandI18n(const MhwRngHostApi* host,
+                                          MhwRngPluginId selfId,
+                                          const char* subcmd,
+                                          const char* usageExample,
+                                          const MhwRngLocaleText* helpTexts,
+                                          std::size_t helpCount,
+                                          MhwRngSubcommandFn fn,
+                                          void* userData) noexcept {
+    if (!host) return false;
+    if (host->structSize >= offsetof(MhwRngHostApi, RegisterSubcommandI18n) + sizeof(host->RegisterSubcommandI18n) &&
+        host->RegisterSubcommandI18n) {
+        return host->RegisterSubcommandI18n(selfId, subcmd, usageExample, helpTexts, helpCount, fn, userData);
+    }
+    if (!host->RegisterSubcommand) return false;
+    const char* singleHelp = MhwRng_SelectTextFallback(MhwRng_HostGetLanguage(host), helpTexts, helpCount, "");
+    return host->RegisterSubcommand(selfId, subcmd, usageExample, singleHelp, fn, userData);
+}
+
+inline bool MhwRng_RegisterSubcommandBi(const MhwRngHostApi* host,
+                                        MhwRngPluginId selfId,
+                                        const char* subcmd,
+                                        const char* usageExample,
+                                        const char* zhHelp,
+                                        const char* enHelp,
+                                        MhwRngSubcommandFn fn,
+                                        void* userData) noexcept {
+    const MhwRngLocaleText helps[2] = { { "zh", zhHelp }, { "en", enHelp } };
+    return MhwRng_RegisterSubcommandI18n(host, selfId, subcmd, usageExample, helps, 2U, fn, userData);
+}
+
+inline bool MhwRng_RegisterSubcommandCompleter(const MhwRngHostApi* host,
+                                               MhwRngPluginId selfId,
+                                               const char* subcmd,
+                                               MhwRngSubcommandCompleteFn completer,
+                                               void* userData = nullptr) noexcept {
+    if (!host || !subcmd || !completer) return false;
+    if (host->structSize < offsetof(MhwRngHostApi, RegisterSubcommandCompleter) + sizeof(host->RegisterSubcommandCompleter)) {
+        return false;
+    }
+    if (!host->RegisterSubcommandCompleter) return false;
+    return host->RegisterSubcommandCompleter(selfId, subcmd, completer, userData);
+}
+
+inline bool MhwRng_RegisterSiteMetaI18n(const MhwRngHostApi* host,
+                                        MhwRngPluginId selfId,
+                                        std::uint32_t rva,
+                                        const char* shortAlias,
+                                        const MhwRngLocaleText* descriptions,
+                                        std::size_t descCount,
+                                        MhwRngValueFormatterFn formatterOrNull,
+                                        void* userData) noexcept {
+    if (!host) return false;
+    if (host->structSize >= offsetof(MhwRngHostApi, RegisterSiteMetaI18n) + sizeof(host->RegisterSiteMetaI18n) &&
+        host->RegisterSiteMetaI18n) {
+        return host->RegisterSiteMetaI18n(selfId, rva, shortAlias, descriptions, descCount, formatterOrNull, userData);
+    }
+    if (!host->RegisterSiteMeta) return false;
+    const char* singleDesc = MhwRng_SelectTextFallback(MhwRng_HostGetLanguage(host), descriptions, descCount, "");
+    return host->RegisterSiteMeta(selfId, rva, shortAlias, singleDesc, formatterOrNull, userData);
+}
+
+inline bool MhwRng_RegisterSiteMetaBi(const MhwRngHostApi* host,
+                                      MhwRngPluginId selfId,
+                                      std::uint32_t rva,
+                                      const char* shortAlias,
+                                      const char* zhDescription,
+                                      const char* enDescription,
+                                      MhwRngValueFormatterFn formatterOrNull,
+                                      void* userData) noexcept {
+    const MhwRngLocaleText descs[2] = { { "zh", zhDescription }, { "en", enDescription } };
+    return MhwRng_RegisterSiteMetaI18n(host, selfId, rva, shortAlias, descs, 2U, formatterOrNull, userData);
+}
+
+inline std::uint32_t MhwRng_HostCaptureCallerRvas(const MhwRngHostApi* host,
+                                                  const MhwRngDrawContext* ctx,
+                                                  std::uint32_t* outRvas,
+                                                  std::uint32_t maxDepth) noexcept {
+    if (!host || !ctx || !outRvas || maxDepth == 0U) return 0U;
+    if (host->structSize < offsetof(MhwRngHostApi, CaptureCallerRvas) + sizeof(host->CaptureCallerRvas)) return 0U;
+    if (!host->CaptureCallerRvas) return 0U;
+    return host->CaptureCallerRvas(ctx, outRvas, maxDepth);
+}
 
 // Every DLL in `nativePC\plugins\mhw_rng\*.dll` exports these 3 functions:
 using MhwRngPluginGetInfoFn  = const MhwRngPluginDescriptor*(__cdecl*)();
@@ -425,3 +741,13 @@ MHW_RNG_API std::uint32_t        MhwRng_CaptureStateBlob(void* outBuf, std::uint
 MHW_RNG_API bool                 MhwRng_RestoreStateBlob(const void* buf, std::uint32_t bufSize);
 MHW_RNG_API bool                 MhwRng_SetInstancePolicy(std::uintptr_t instancePtr, std::uint32_t policy);
 MHW_RNG_API std::uint32_t        MhwRng_GetInstancePolicy(std::uintptr_t instancePtr);
+MHW_RNG_API const char*          MhwRng_GetLanguage();
+MHW_RNG_API std::uint32_t        MhwRng_GetLanguageId();
+MHW_RNG_API void                 MhwRng_SetLanguage(const char* lang);
+MHW_RNG_API const char*          MhwRng_SelectText(const MhwRngLocaleText* entries,
+                                                   std::size_t count,
+                                                   const char* fallbackText);
+MHW_RNG_API bool                 MhwRng_ExecuteCommand(const char* commandLine);
+MHW_RNG_API std::uint32_t        MhwRng_CaptureCallerRvas(const MhwRngDrawContext* ctx,
+                                                          std::uint32_t* outRvas,
+                                                          std::uint32_t maxDepth);
