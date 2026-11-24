@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-//  MHW Universal RNG Microkernel & Plugin SDK — Public C/C++ API (v3.3)
+//  MHW Universal RNG Microkernel & Plugin SDK — Public C/C++ API (v3.5)
 //  Core Module : nativePC\plugins\mhw_rng.dll
 //  Plugin Dir  : nativePC\plugins\mhw_rng\*.dll (Shadow-Copy Hot-Reloadable!)
 //  Target Game : Monster Hunter World: Iceborne 15.23 (Steam build 15539686)
@@ -20,11 +20,13 @@ enum MhwRngApiVersion : std::uint32_t {
     kMhwRngApiVersion = 3U
 };
 
-using MhwRngPluginId   = std::uint16_t;
-using MhwRngHookHandle = std::uint32_t; // 0 = invalid
+using MhwRngPluginId     = std::uint16_t;
+using MhwRngHookHandle   = std::uint32_t; // 0 = invalid
+using MhwRngServiceLease = std::uint64_t; // 0 = invalid
 
-constexpr MhwRngPluginId   kMhwRngPluginIdKernel = 0U;
-constexpr MhwRngHookHandle kMhwRngInvalidHandle  = 0U;
+constexpr MhwRngPluginId     kMhwRngPluginIdKernel = 0U;
+constexpr MhwRngHookHandle   kMhwRngInvalidHandle  = 0U;
+constexpr MhwRngServiceLease kMhwRngInvalidLease   = 0ULL;
 
 enum MhwRngEngineMode : std::uint32_t {
     kMhwRngModeOff         = 0U, // Pure vanilla RNG, zero-overhead fast bypass
@@ -275,7 +277,43 @@ struct MhwRngLocaleText {
     const char* lang;            // Primary BCP-47 tag, e.g. "zh", "en", "ja", "ko"
     const char* text;            // UTF-8 localized text
 };
+
+// ---- v3.5 Event Bus & Hot-Reload-Safe Service Registry Types ----
+struct MhwRngCustomEvent {
+    std::uint32_t  structSize;   // sizeof(MhwRngCustomEvent)
+    std::uint32_t  payloadSize;
+    const char*    topic;        // Canonical lowercase dot-separated topic, e.g. "mhw.world.quest_enter"
+    MhwRngPluginId senderId;
+    std::uint16_t  reserved;
+    std::uint64_t  seq;
+    const void*    payload;
+};
+
+struct MhwRngServiceInfo {
+    std::uint32_t  structSize;   // sizeof(MhwRngServiceInfo)
+    std::uint32_t  version;
+    MhwRngPluginId ownerId;
+    std::uint16_t  reserved;
+    const char*    name;
+    const void*    apiTable;
+};
+
+struct MhwRngServiceEventPayload {
+    std::uint32_t  structSize;   // sizeof(MhwRngServiceEventPayload)
+    std::uint32_t  version;
+    MhwRngPluginId ownerId;
+    std::uint16_t  reserved;
+    char           name[64];
+};
 #pragma pack(pop)
+
+using MhwRngMainThreadTickFn = void(__fastcall*)(
+    std::uint64_t            tickSeq,
+    void*                    userData);
+
+using MhwRngCustomEventFn = void(__fastcall*)(
+    const MhwRngCustomEvent* ev,
+    void*                    userData);
 
 using MhwRngSubcommandFn = void(__fastcall*)(
     int                      argc,      // Token count AFTER `<subcmd>` (argv[0] is first arg after subcmd)
@@ -472,6 +510,33 @@ struct MhwRngHostApi {
                                                             const char* subcmd,
                                                             MhwRngSubcommandCompleteFn completer,
                                                             void* userData);
+
+    // ---- v3.5 Main-Thread Tick, Event Bus & Hot-Reload-Safe Service Registry ----
+    MhwRngHookHandle   (__fastcall *RegisterMainThreadTick)(MhwRngPluginId selfId,
+                                                            MhwRngMainThreadTickFn fn,
+                                                            void* userData);
+    void               (__fastcall *UnregisterMainThreadTick)(MhwRngPluginId selfId,
+                                                              MhwRngHookHandle handle);
+    MhwRngHookHandle   (__fastcall *SubscribeEvent)(MhwRngPluginId selfId,
+                                                    const char* topicPattern,
+                                                    MhwRngCustomEventFn fn,
+                                                    void* userData);
+    void               (__fastcall *UnsubscribeEvent)(MhwRngPluginId selfId,
+                                                      MhwRngHookHandle handle);
+    std::uint32_t      (__fastcall *EmitEvent)(MhwRngPluginId selfId,
+                                               const char* topic,
+                                               const void* payload,
+                                               std::uint32_t payloadSize);
+    bool               (__fastcall *RegisterService)(MhwRngPluginId selfId,
+                                                     const char* serviceName,
+                                                     std::uint32_t version,
+                                                     const void* apiTable);
+    void               (__fastcall *UnregisterService)(MhwRngPluginId selfId,
+                                                       const char* serviceName);
+    MhwRngServiceLease (__fastcall *AcquireService)(const char* serviceName,
+                                                    std::uint32_t minVersion,
+                                                    MhwRngServiceInfo* outInfo);
+    void               (__fastcall *ReleaseService)(MhwRngServiceLease lease);
 };
 #pragma pack(pop)
 
@@ -701,6 +766,180 @@ inline std::uint32_t MhwRng_HostCaptureCallerRvas(const MhwRngHostApi* host,
     return host->CaptureCallerRvas(ctx, outRvas, maxDepth);
 }
 
+inline MhwRngHookHandle MhwRng_HostRegisterMainThreadTick(const MhwRngHostApi* host,
+                                                          MhwRngPluginId selfId,
+                                                          MhwRngMainThreadTickFn fn,
+                                                          void* userData = nullptr) noexcept {
+    if (!host || !fn) return kMhwRngInvalidHandle;
+    if (host->structSize < offsetof(MhwRngHostApi, RegisterMainThreadTick) + sizeof(host->RegisterMainThreadTick)) {
+        return kMhwRngInvalidHandle;
+    }
+    if (!host->RegisterMainThreadTick) return kMhwRngInvalidHandle;
+    return host->RegisterMainThreadTick(selfId, fn, userData);
+}
+
+inline void MhwRng_HostUnregisterMainThreadTick(const MhwRngHostApi* host,
+                                                 MhwRngPluginId selfId,
+                                                 MhwRngHookHandle handle) noexcept {
+    if (!host || handle == kMhwRngInvalidHandle) return;
+    if (host->structSize < offsetof(MhwRngHostApi, UnregisterMainThreadTick) + sizeof(host->UnregisterMainThreadTick)) {
+        return;
+    }
+    if (host->UnregisterMainThreadTick) host->UnregisterMainThreadTick(selfId, handle);
+}
+
+inline MhwRngHookHandle MhwRng_HostSubscribeEvent(const MhwRngHostApi* host,
+                                                  MhwRngPluginId selfId,
+                                                  const char* topicPattern,
+                                                  MhwRngCustomEventFn fn,
+                                                  void* userData = nullptr) noexcept {
+    if (!host || !topicPattern || !fn) return kMhwRngInvalidHandle;
+    if (host->structSize < offsetof(MhwRngHostApi, SubscribeEvent) + sizeof(host->SubscribeEvent)) {
+        return kMhwRngInvalidHandle;
+    }
+    if (!host->SubscribeEvent) return kMhwRngInvalidHandle;
+    return host->SubscribeEvent(selfId, topicPattern, fn, userData);
+}
+
+inline void MhwRng_HostUnsubscribeEvent(const MhwRngHostApi* host,
+                                          MhwRngPluginId selfId,
+                                          MhwRngHookHandle handle) noexcept {
+    if (!host || handle == kMhwRngInvalidHandle) return;
+    if (host->structSize < offsetof(MhwRngHostApi, UnsubscribeEvent) + sizeof(host->UnsubscribeEvent)) {
+        return;
+    }
+    if (host->UnsubscribeEvent) host->UnsubscribeEvent(selfId, handle);
+}
+
+inline std::uint32_t MhwRng_HostEmitEvent(const MhwRngHostApi* host,
+                                          MhwRngPluginId selfId,
+                                          const char* topic,
+                                          const void* payload = nullptr,
+                                          std::uint32_t payloadSize = 0U) noexcept {
+    if (!host || !topic || topic[0] == '\0') return 0U;
+    if (host->structSize < offsetof(MhwRngHostApi, EmitEvent) + sizeof(host->EmitEvent)) {
+        return 0U;
+    }
+    if (!host->EmitEvent) return 0U;
+    return host->EmitEvent(selfId, topic, payload, payloadSize);
+}
+
+inline bool MhwRng_HostRegisterService(const MhwRngHostApi* host,
+                                       MhwRngPluginId selfId,
+                                       const char* serviceName,
+                                       std::uint32_t version,
+                                       const void* apiTable) noexcept {
+    if (!host || !serviceName || !apiTable || version == 0U) return false;
+    if (host->structSize < offsetof(MhwRngHostApi, RegisterService) + sizeof(host->RegisterService)) {
+        return false;
+    }
+    if (!host->RegisterService) return false;
+    return host->RegisterService(selfId, serviceName, version, apiTable);
+}
+
+inline void MhwRng_HostUnregisterService(const MhwRngHostApi* host,
+                                         MhwRngPluginId selfId,
+                                         const char* serviceName) noexcept {
+    if (!host || !serviceName) return;
+    if (host->structSize < offsetof(MhwRngHostApi, UnregisterService) + sizeof(host->UnregisterService)) {
+        return;
+    }
+    if (host->UnregisterService) host->UnregisterService(selfId, serviceName);
+}
+
+inline MhwRngServiceLease MhwRng_HostAcquireService(const MhwRngHostApi* host,
+                                                    const char* serviceName,
+                                                    std::uint32_t minVersion,
+                                                    MhwRngServiceInfo* outInfo) noexcept {
+    if (!host || !serviceName || !outInfo) return kMhwRngInvalidLease;
+    if (host->structSize < offsetof(MhwRngHostApi, AcquireService) + sizeof(host->AcquireService)) {
+        return kMhwRngInvalidLease;
+    }
+    if (!host->AcquireService) return kMhwRngInvalidLease;
+    return host->AcquireService(serviceName, minVersion, outInfo);
+}
+
+inline void MhwRng_HostReleaseService(const MhwRngHostApi* host, MhwRngServiceLease lease) noexcept {
+    if (!host || lease == kMhwRngInvalidLease) return;
+    if (host->structSize < offsetof(MhwRngHostApi, ReleaseService) + sizeof(host->ReleaseService)) {
+        return;
+    }
+    if (host->ReleaseService) host->ReleaseService(lease);
+}
+
+template <typename ApiT>
+class MhwRngServiceGuard {
+public:
+    MhwRngServiceGuard(const MhwRngHostApi* host,
+                       const char* serviceName,
+                       std::uint32_t minVersion = 1U,
+                       std::size_t minStructSize = sizeof(ApiT)) noexcept
+        : host_(host) {
+        if (!host || !serviceName) return;
+        MhwRngServiceInfo info{};
+        info.structSize = sizeof(info);
+        const MhwRngServiceLease lease = MhwRng_HostAcquireService(host, serviceName, minVersion, &info);
+        if (lease == kMhwRngInvalidLease || !info.apiTable) {
+            if (lease != kMhwRngInvalidLease) MhwRng_HostReleaseService(host, lease);
+            return;
+        }
+        const auto* tbl = static_cast<const ApiT*>(info.apiTable);
+        if (tbl->structSize < minStructSize || tbl->apiVersion < minVersion) {
+            MhwRng_HostReleaseService(host, lease);
+            return;
+        }
+        lease_   = lease;
+        api_     = tbl;
+        version_ = info.version;
+    }
+
+    ~MhwRngServiceGuard() noexcept { Reset(); }
+
+    MhwRngServiceGuard(const MhwRngServiceGuard&)            = delete;
+    MhwRngServiceGuard& operator=(const MhwRngServiceGuard&) = delete;
+
+    MhwRngServiceGuard(MhwRngServiceGuard&& other) noexcept
+        : host_(other.host_), lease_(other.lease_), api_(other.api_), version_(other.version_) {
+        other.lease_   = kMhwRngInvalidLease;
+        other.api_     = nullptr;
+        other.version_ = 0U;
+    }
+
+    MhwRngServiceGuard& operator=(MhwRngServiceGuard&& other) noexcept {
+        if (this != &other) {
+            Reset();
+            host_          = other.host_;
+            lease_         = other.lease_;
+            api_           = other.api_;
+            version_       = other.version_;
+            other.lease_   = kMhwRngInvalidLease;
+            other.api_     = nullptr;
+            other.version_ = 0U;
+        }
+        return *this;
+    }
+
+    void Reset() noexcept {
+        if (lease_ != kMhwRngInvalidLease) {
+            MhwRng_HostReleaseService(host_, lease_);
+            lease_ = kMhwRngInvalidLease;
+        }
+        api_     = nullptr;
+        version_ = 0U;
+    }
+
+    explicit operator bool() const noexcept { return api_ != nullptr; }
+    const ApiT* operator->() const noexcept { return api_; }
+    const ApiT* Get() const noexcept { return api_; }
+    std::uint32_t Version() const noexcept { return version_; }
+
+private:
+    const MhwRngHostApi* host_    = nullptr;
+    MhwRngServiceLease   lease_   = kMhwRngInvalidLease;
+    const ApiT*          api_     = nullptr;
+    std::uint32_t        version_ = 0U;
+};
+
 // Every DLL in `nativePC\plugins\mhw_rng\*.dll` exports these 3 functions:
 using MhwRngPluginGetInfoFn  = const MhwRngPluginDescriptor*(__cdecl*)();
 using MhwRngPluginInitFn     = bool(__cdecl*)(const MhwRngHostApi* host, MhwRngPluginId selfId);
@@ -751,3 +990,4 @@ MHW_RNG_API bool                 MhwRng_ExecuteCommand(const char* commandLine);
 MHW_RNG_API std::uint32_t        MhwRng_CaptureCallerRvas(const MhwRngDrawContext* ctx,
                                                           std::uint32_t* outRvas,
                                                           std::uint32_t maxDepth);
+MHW_RNG_API void                 MhwRng_PumpMainThreadTicks();

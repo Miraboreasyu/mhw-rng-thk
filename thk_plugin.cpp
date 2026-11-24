@@ -13,6 +13,7 @@
 // ============================================================================
 #include "thk_preset_io.h"
 #include "presets/fatalis_p1_nasty.h"
+#include "mhw_world_api.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -29,8 +30,17 @@ MhwRngPluginId       g_selfId = 0U;
 // Strict leaf mutex: NEVER call `g_host->...` or `ctx->DrawDeterministic(...)` while holding `g_stateMx`!
 std::mutex           g_stateMx;
 thk::ThkEngine       g_engine{};
-bool                 g_fatalisFarMulti = false;
-bool                 g_fatalisGuards   = true;
+bool                 g_fatalisFarMulti    = false;
+bool                 g_fatalisGuards      = true;
+MhwRngHookHandle     g_worldEvQuestEnter  = kMhwRngInvalidHandle;
+MhwRngHookHandle     g_worldEvQuestLeave  = kMhwRngInvalidHandle;
+MhwRngHookHandle     g_worldEvTitleReturn = kMhwRngInvalidHandle;
+
+void __fastcall OnWorldEvent(const MhwRngCustomEvent* ev, void*) {
+    if (!ev || !ev->topic) return;
+    std::lock_guard<std::mutex> lk(g_stateMx);
+    g_engine.ResetRuntimeTrackers();
+}
 
 // ============================================================================
 //  Preset Loader Helper (Filesystem I/O & `g_host` Calls Run Unlocked)
@@ -364,6 +374,10 @@ void PrintThkStatus() {
     } else {
         g_host->ChatPrint(en ? "[thk] Usage: `$rng thk probe|nodes|stats|rule|seq|preset|reset|clear|diag|help`"
                              : u8"[thk] 用法: `$rng thk probe|nodes|stats|rule|seq|preset|reset|clear|diag|help`");
+    }
+    char worldBuf[128]{};
+    if (MhwWorld_TryFormatSummary(g_host, worldBuf, sizeof(worldBuf), en)) {
+        g_host->ChatPrintf(en ? "[thk] World context: %s" : u8"[thk] 世界上下文: %s", worldBuf);
     }
 }
 
@@ -1235,14 +1249,35 @@ MHW_RNG_PLUGIN_EXPORT bool MhwRngPlugin_Init(const MhwRngHostApi* host, MhwRngPl
         &Cmd_Fatalis,
         nullptr);
     MhwRng_RegisterSubcommandCompleter(host, selfId, "fatalis", &Complete_Fatalis, nullptr);
+    g_worldEvQuestEnter  = MhwRng_HostSubscribeEvent(host, selfId, kMhwWorldEvQuestEnter,  &OnWorldEvent, nullptr);
+    g_worldEvQuestLeave  = MhwRng_HostSubscribeEvent(host, selfId, kMhwWorldEvQuestLeave,  &OnWorldEvent, nullptr);
+    g_worldEvTitleReturn = MhwRng_HostSubscribeEvent(host, selfId, kMhwWorldEvTitleReturn, &OnWorldEvent, nullptr);
     return true;
 }
 
 MHW_RNG_PLUGIN_EXPORT void MhwRngPlugin_Shutdown() {
-    std::lock_guard<std::mutex> lk(g_stateMx);
-    g_engine          = thk::ThkEngine{};
-    g_fatalisFarMulti = false;
-    g_fatalisGuards   = true;
-    g_host            = nullptr;
-    g_selfId          = 0U;
+    const MhwRngHostApi* hostCopy = nullptr;
+    MhwRngPluginId       selfCopy = 0U;
+    MhwRngHookHandle     ev1      = kMhwRngInvalidHandle;
+    MhwRngHookHandle     ev2      = kMhwRngInvalidHandle;
+    MhwRngHookHandle     ev3      = kMhwRngInvalidHandle;
+    {
+        std::lock_guard<std::mutex> lk(g_stateMx);
+        hostCopy             = g_host;
+        selfCopy             = g_selfId;
+        ev1                  = g_worldEvQuestEnter;
+        ev2                  = g_worldEvQuestLeave;
+        ev3                  = g_worldEvTitleReturn;
+        g_worldEvQuestEnter  = kMhwRngInvalidHandle;
+        g_worldEvQuestLeave  = kMhwRngInvalidHandle;
+        g_worldEvTitleReturn = kMhwRngInvalidHandle;
+        g_engine             = thk::ThkEngine{};
+        g_fatalisFarMulti    = false;
+        g_fatalisGuards      = true;
+        g_host               = nullptr;
+        g_selfId             = 0U;
+    }
+    MhwRng_HostUnsubscribeEvent(hostCopy, selfCopy, ev1);
+    MhwRng_HostUnsubscribeEvent(hostCopy, selfCopy, ev2);
+    MhwRng_HostUnsubscribeEvent(hostCopy, selfCopy, ev3);
 }

@@ -7,6 +7,8 @@
 //  simulates vanilla weighted rolls identically to `cThinkMgr::updateThk`.
 // ============================================================================
 #include "mhw_rng_api.h"
+#include "mhw_rng_math.h"
+#include "mhw_1523_world.h"
 
 #include <windows.h>
 #include <cmath>
@@ -23,7 +25,7 @@ constexpr std::uintptr_t kRvaCallerPrefetchTick = 0x133A876U; // `FUN_14133a850(
 constexpr std::uintptr_t kRvaCThinkMgrVft       = 0x324F438U; // `cThinkMgr::vft`
 constexpr std::uintptr_t kRvaCThinkEmVft        = 0x324F320U; // `cThinkEm::vft`
 
-constexpr std::uintptr_t kOffMonsterId          = 0x12280U;   // `uint32_t` (`em` ID: e.g. 101=Fatalis, 91=Rajang)
+constexpr std::uintptr_t kOffMonsterId          = mhw1523::kOffEnemyMonsterId; // `uint32_t` (`em` ID: e.g. 101=Fatalis, 91=Rajang)
 constexpr std::uintptr_t kOffThinkEmToMgr       = 0x20U;
 constexpr std::uintptr_t kOffThinkEmMonster     = 0x08U;
 constexpr std::uintptr_t kOffMgrCandidates      = 0x40U;      // `ThkCandidate[30]` (`{ int32_t segIdx; float weight; }`)
@@ -42,8 +44,8 @@ constexpr std::size_t    kMaxSegmentsPerNode    = 256U;
 constexpr std::size_t    kMaxCallerChain        = 8U;
 
 // Open float interval `(0.0f, 1.0f)` bounds for `cThinkMgr::updateThk` (`acc <= roll && roll < acc + weight[k]`):
-constexpr std::uint32_t  kMinSafeFloatU32       = 0x00000001U;
-constexpr std::uint32_t  kMaxSafeFloatU32       = 0xFFFFFF00U;
+using mhw_sdk::kMinSafeFloatU32;
+using mhw_sdk::kMaxSafeFloatU32;
 
 // Control-flow kind bits in `seg + 0x00` (`ctrlFlags & 0xC0`):
 constexpr std::uint32_t  kCtrlKindMask          = 0xC0U;
@@ -96,18 +98,8 @@ struct ThkVmContext {
     ThkCandidateOption cands[kMaxThkCandidates]{};
 };
 
-inline bool IsValidUserPtr(std::uintptr_t p, std::uintptr_t alignMask = 0x7ULL) noexcept {
-    return p >= 0x100000ULL && p <= 0x00007FFFFFFF0000ULL && (p & alignMask) == 0ULL;
-}
-
-inline std::uint32_t FractionToOpenSafeU32(double frac0To1) noexcept {
-    if (!(frac0To1 > 0.0)) return kMinSafeFloatU32;
-    if (frac0To1 >= 1.0) return kMaxSafeFloatU32;
-    const auto u = static_cast<std::uint64_t>(frac0To1 * static_cast<double>(4294967296.0) + 0.5);
-    if (u <= kMinSafeFloatU32) return kMinSafeFloatU32;
-    if (u >= kMaxSafeFloatU32) return kMaxSafeFloatU32;
-    return static_cast<std::uint32_t>(u);
-}
+using mhw_sdk::IsValidUserPtr;
+using mhw_sdk::FractionToOpenSafeU32;
 
 // Locate node END sentinel (`seg[0] & 1`) to recover exact `nodeArrIdx` (`endVal - 10000`).
 inline std::int32_t ResolveNodeArrIdx(std::uintptr_t nodeBase) noexcept {
