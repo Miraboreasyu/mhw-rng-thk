@@ -59,8 +59,9 @@ struct ThkActionStep {
 };
 
 struct ThkPendingWeightedPick {
-    bool          active      = false;
-    std::uint32_t ruleId      = 0U;
+    bool          active           = false;
+    bool          needsRuleCounter = false;
+    std::uint32_t ruleId           = 0U;
     std::uint32_t condId      = 0U;
     std::uint32_t stepIdx     = 0U;
     std::uint32_t nodeVisit   = 0U;
@@ -105,17 +106,51 @@ struct ThkCountGate {
 constexpr std::size_t kMaxFilterItems = 8U;
 constexpr std::size_t kMaxRuleSteps   = 16U;
 
-struct ThkRuleFilter {
-    std::int32_t monsterId    = -1; // -1 = any
-    std::int32_t depth        = -1; // -1 = any
-    std::uint8_t thkFileCount = 0U; // 0  = any file
-    std::int32_t thkFiles[kMaxFilterItems]{};
-    std::uint8_t nodeCount    = 0U; // 0  = any node
+struct ThkContextSlot {
+    std::int32_t monsterId   = -1;
+    std::int32_t depth       = -1;
+    std::uint8_t fileCount   = 0U;
+    std::int32_t files[kMaxFilterItems]{};
+    std::uint8_t nodeCount   = 0U;
     std::int32_t nodes[kMaxFilterItems]{};
-    std::int32_t seg0Min      = -1; // -1 = unbounded
-    std::int32_t seg0Max      = -1; // -1 = unbounded
-    std::uint8_t callerCount  = 0U; // 0  = any caller
+    std::int32_t seg0Min     = -1;
+    std::int32_t seg0Max     = -1;
+    std::uint8_t callerCount = 0U;
     std::int32_t callers[kMaxFilterItems]{};
+    std::uint8_t moveCount   = 0U;
+    std::int32_t moveFiles[kMaxFilterItems]{};
+    std::int32_t moveNodes[kMaxFilterItems]{};
+};
+
+struct ThkNamedContext {
+    char                        name[64]{};
+    std::vector<ThkContextSlot> slots{};
+};
+
+struct ThkRuleFilter {
+    std::int32_t monsterId       = -1; // -1 = any
+    std::int32_t depth           = -1; // -1 = any
+    std::uint8_t thkFileCount    = 0U; // 0  = any file
+    std::int32_t thkFiles[kMaxFilterItems]{};
+    std::uint8_t nodeCount       = 0U; // 0  = any node
+    std::int32_t nodes[kMaxFilterItems]{};
+    std::int32_t seg0Min         = -1; // -1 = unbounded
+    std::int32_t seg0Max         = -1; // -1 = unbounded
+    std::uint8_t callerCount     = 0U; // 0  = any caller
+    std::int32_t callers[kMaxFilterItems]{};
+    std::uint8_t prevMoveCount   = 0U; // 0  = any previous move
+    std::int32_t prevMoveFiles[kMaxFilterItems]{};
+    std::int32_t prevMoveNodes[kMaxFilterItems]{};
+    std::int32_t prevDepth       = -1; // -1 = any previous depth
+    std::uint8_t prevFileCount   = 0U; // 0  = any previous file
+    std::int32_t prevFiles[kMaxFilterItems]{};
+    std::uint8_t prevNodeCount   = 0U; // 0  = any previous node
+    std::int32_t prevNodes[kMaxFilterItems]{};
+    std::int32_t prevSeg0Min     = -1; // -1 = unbounded
+    std::int32_t prevSeg0Max     = -1; // -1 = unbounded
+    std::uint8_t prevCallerCount = 0U; // 0  = any previous caller
+    std::int32_t prevCallers[kMaxFilterItems]{};
+    std::int32_t prevCtxId       = -1; // -1 = none; >=0 = index into ThkEngine::presetContexts
 };
 
 struct ThkRule {
@@ -154,10 +189,25 @@ struct RuleCounterEntry {
     std::uint32_t firedCount   = 0U;
 };
 
+struct LastMoveContext {
+    bool          valid         = false;
+    std::int32_t  moveFile      = -1;
+    std::int32_t  moveNode      = -1;
+    std::uint32_t depth         = 0U;
+    std::int32_t  file          = -1;
+    std::int32_t  node          = -1;
+    std::int32_t  seg0          = -1;
+    std::uint8_t  callerCount   = 0U;
+    std::int32_t  callers[kMaxCallerChain]{};
+    std::int32_t  chosenSegIdx  = -1;
+    std::uint32_t ctrlFlags     = 0U;
+    bool          wasControlled = false;
+};
+
 constexpr std::size_t kMaxTrackers      = 8U;
 constexpr std::size_t kMaxNodeEntries   = 64U;
 constexpr std::size_t kMaxMoveEntries   = 64U;
-constexpr std::size_t kMaxRuleCounters  = 64U;
+constexpr std::size_t kMaxRuleCounters  = 1024U;
 constexpr std::size_t kRecentEventCap   = 16U;
 constexpr std::size_t kControlledCap    = 8U;
 
@@ -171,8 +221,21 @@ struct MonsterRuntimeTracker {
     NodeVisitEntry   nodeVisits[kMaxNodeEntries]{};
     std::size_t      moveCount      = 0U;
     MoveHitEntry     moveHits[kMaxMoveEntries]{};
+    LastMoveContext  lastMove{};
     std::size_t      ruleCntCount   = 0U;
     RuleCounterEntry ruleCounters[kMaxRuleCounters]{};
+
+    void Clear() noexcept {
+        inUse          = false;
+        monsterPtr     = 0U;
+        monsterId      = 0U;
+        lastTouchSeq   = 0ULL;
+        totalDecisions = 0ULL;
+        nodeCount      = 0U;
+        moveCount      = 0U;
+        lastMove       = LastMoveContext{};
+        ruleCntCount   = 0U;
+    }
 
     std::uint32_t IncrementNodeVisit(std::uint32_t d, std::int32_t f, std::int32_t n, std::int32_t seg0) noexcept {
         for (std::size_t i = 0U; i < nodeCount; ++i) {
@@ -224,6 +287,26 @@ struct MonsterRuntimeTracker {
             e.controlledCount = controlled ? 1U : 0U;
             e.naturalCount    = controlled ? 0U : 1U;
         }
+    }
+
+    void RecordMoveExecution(const ThkVmContext& lc,
+                             const ThkCandidateOption& chosen,
+                             bool controlled) noexcept {
+        if (chosen.targetThkFile < 0 || chosen.targetNodeId < 0) return;
+        lastMove.valid         = true;
+        lastMove.moveFile      = chosen.targetThkFile;
+        lastMove.moveNode      = chosen.targetNodeId;
+        lastMove.depth         = lc.depth;
+        lastMove.file          = lc.thkFileIdx;
+        lastMove.node          = lc.nodeArrIdx;
+        lastMove.seg0          = (lc.candCount > 0U) ? lc.cands[0].segIdx : -1;
+        const std::size_t cc   = (lc.callerChainCount < kMaxCallerChain) ? lc.callerChainCount : kMaxCallerChain;
+        lastMove.callerCount   = static_cast<std::uint8_t>(cc);
+        for (std::size_t i = 0U; i < cc; ++i) lastMove.callers[i] = lc.callerChain[i];
+        lastMove.chosenSegIdx  = chosen.segIdx;
+        lastMove.ctrlFlags     = chosen.ctrlFlags;
+        lastMove.wasControlled = controlled;
+        IncrementMoveHit(chosen.targetThkFile, chosen.targetNodeId, controlled);
     }
 
     RuleCounterEntry* GetOrCreateRuleCounter(std::uint32_t ruleId) noexcept {
@@ -350,9 +433,10 @@ struct ThkEngine {
     std::string              activePresetName{};
     std::string              activePresetDesc{};
     std::string              activePresetDescEn{};
-    std::string              activePresetSource{};
-    std::vector<ThkRule>     presetRules{};
-    std::vector<std::string> disabledTags{};
+    std::string                  activePresetSource{};
+    std::vector<ThkRule>         presetRules{};
+    std::vector<ThkNamedContext> presetContexts{};
+    std::vector<std::string>     disabledTags{};
 
     bool                     probeEnabled       = false;
     std::int32_t             probeMonsterFilter = -1; // -1 = any monster
@@ -414,10 +498,19 @@ struct ThkEngine {
         return false;
     }
 
+    static bool HasPrevFilter(const ThkRuleFilter& f) noexcept {
+        return f.prevMoveCount > 0U || f.prevDepth >= 0 || f.prevFileCount > 0U ||
+               f.prevNodeCount > 0U || f.prevSeg0Min >= 0 || f.prevSeg0Max >= 0 ||
+               f.prevCallerCount > 0U || f.prevCtxId >= 0;
+    }
+
     bool AnyActiveRuleNeedsNaturalMoves() const {
         auto scan = [&](const std::vector<ThkRule>& list) {
             for (const auto& r : list) {
-                if (IsRuleActive(r) && r.gate.scope == ThkCountScope::kMoveHits) return true;
+                if (IsRuleActive(r) &&
+                    (r.gate.scope == ThkCountScope::kMoveHits || HasPrevFilter(r.filter))) {
+                    return true;
+                }
             }
             return false;
         };
@@ -439,7 +532,7 @@ struct ThkEngine {
             }
             if (trackers[i].lastTouchSeq < trackers[pick].lastTouchSeq) pick = i;
         }
-        trackers[pick]                = MonsterRuntimeTracker{};
+        trackers[pick].Clear();
         trackers[pick].inUse        = true;
         trackers[pick].monsterPtr   = monPtr;
         trackers[pick].monsterId    = monId;
@@ -458,7 +551,7 @@ struct ThkEngine {
     }
 
     void ResetRuntimeTrackers() noexcept {
-        for (auto& t : trackers) t = MonsterRuntimeTracker{};
+        for (auto& t : trackers) t.Clear();
         globalTickSeq    = 0ULL;
         recentEventCount = 0U;
         recentCtrlCount  = 0U;
@@ -467,7 +560,65 @@ struct ThkEngine {
         diag = ThkDiagCounters{};
     }
 
-    static bool MatchesFilter(const ThkRuleFilter& f, const ThkVmContext& lc) noexcept {
+    static bool RuleNeedsCounter(const ThkRule& rule) noexcept {
+        if (rule.gate.scope == ThkCountScope::kRuleMatched) {
+            return true;
+        }
+        if (rule.seqScope == ThkSeqScope::kRuleFired &&
+            (rule.stepCount > 1U || rule.seqEnd == ThkSeqEndMode::kFallbackVanilla)) {
+            return true;
+        }
+        return false;
+    }
+
+    static bool MatchesContextSlot(const ThkContextSlot& s,
+                                   std::uint32_t monsterId,
+                                   const LastMoveContext& lm) noexcept {
+        if (!lm.valid) return false;
+        if (s.monsterId >= 0 && monsterId != static_cast<std::uint32_t>(s.monsterId)) return false;
+        if (s.depth >= 0 && lm.depth != static_cast<std::uint32_t>(s.depth)) return false;
+        if (s.fileCount > 0U) {
+            bool hit = false;
+            for (std::uint8_t i = 0U; i < s.fileCount; ++i) {
+                if (s.files[i] == lm.file) { hit = true; break; }
+            }
+            if (!hit) return false;
+        }
+        if (s.nodeCount > 0U) {
+            bool hit = false;
+            for (std::uint8_t i = 0U; i < s.nodeCount; ++i) {
+                if (s.nodes[i] == lm.node) { hit = true; break; }
+            }
+            if (!hit) return false;
+        }
+        if (s.seg0Min >= 0 && lm.seg0 < s.seg0Min) return false;
+        if (s.seg0Max >= 0 && lm.seg0 > s.seg0Max) return false;
+        if (s.callerCount > 0U) {
+            bool hit = false;
+            for (std::uint8_t i = 0U; i < s.callerCount && !hit; ++i) {
+                for (std::uint8_t c = 0U; c < lm.callerCount; ++c) {
+                    if (s.callers[i] == lm.callers[c]) { hit = true; break; }
+                }
+            }
+            if (!hit) return false;
+        }
+        if (s.moveCount > 0U) {
+            bool hit = false;
+            for (std::uint8_t i = 0U; i < s.moveCount; ++i) {
+                if (s.moveFiles[i] == lm.moveFile && s.moveNodes[i] == lm.moveNode) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) return false;
+        }
+        return true;
+    }
+
+    static bool MatchesFilter(const ThkRuleFilter& f,
+                              const ThkVmContext& lc,
+                              const MonsterRuntimeTracker& trk,
+                              const std::vector<ThkNamedContext>* contexts = nullptr) noexcept {
         if (f.monsterId >= 0 && lc.monsterId != static_cast<std::uint32_t>(f.monsterId)) return false;
         if (f.depth >= 0 && lc.depth != static_cast<std::uint32_t>(f.depth)) return false;
         if (f.thkFileCount > 0U) {
@@ -495,6 +646,58 @@ struct ThkEngine {
                 }
             }
             if (!hit) return false;
+        }
+        if (HasPrevFilter(f)) {
+            if (!trk.lastMove.valid) return false;
+            if (f.prevMoveCount > 0U) {
+                bool hit = false;
+                for (std::uint8_t i = 0U; i < f.prevMoveCount; ++i) {
+                    if (f.prevMoveFiles[i] == trk.lastMove.moveFile &&
+                        f.prevMoveNodes[i] == trk.lastMove.moveNode) {
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit) return false;
+            }
+            if (f.prevDepth >= 0 && trk.lastMove.depth != static_cast<std::uint32_t>(f.prevDepth)) return false;
+            if (f.prevFileCount > 0U) {
+                bool hit = false;
+                for (std::uint8_t i = 0U; i < f.prevFileCount; ++i) {
+                    if (f.prevFiles[i] == trk.lastMove.file) { hit = true; break; }
+                }
+                if (!hit) return false;
+            }
+            if (f.prevNodeCount > 0U) {
+                bool hit = false;
+                for (std::uint8_t i = 0U; i < f.prevNodeCount; ++i) {
+                    if (f.prevNodes[i] == trk.lastMove.node) { hit = true; break; }
+                }
+                if (!hit) return false;
+            }
+            if (f.prevSeg0Min >= 0 && trk.lastMove.seg0 < f.prevSeg0Min) return false;
+            if (f.prevSeg0Max >= 0 && trk.lastMove.seg0 > f.prevSeg0Max) return false;
+            if (f.prevCallerCount > 0U) {
+                bool hit = false;
+                for (std::uint8_t i = 0U; i < f.prevCallerCount && !hit; ++i) {
+                    for (std::uint8_t c = 0U; c < trk.lastMove.callerCount; ++c) {
+                        if (f.prevCallers[i] == trk.lastMove.callers[c]) { hit = true; break; }
+                    }
+                }
+                if (!hit) return false;
+            }
+            if (f.prevCtxId >= 0) {
+                if (!contexts || static_cast<std::size_t>(f.prevCtxId) >= contexts->size()) return false;
+                const auto& slots = (*contexts)[static_cast<std::size_t>(f.prevCtxId)].slots;
+                bool hit = false;
+                for (const auto& s : slots) {
+                    if (MatchesContextSlot(s, lc.monsterId, trk.lastMove)) {
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit) return false;
+            }
         }
         return true;
     }
@@ -609,7 +812,7 @@ struct ThkEngine {
 
         const auto& chosen = lc.cands[candIdx];
         if (chosen.targetThkFile >= 0 && chosen.targetNodeId >= 0) {
-            trk.IncrementMoveHit(chosen.targetThkFile, chosen.targetNodeId, true);
+            trk.RecordMoveExecution(lc, chosen, true);
         }
 
         ThkEventRecord rec{};
@@ -656,12 +859,15 @@ struct ThkEngine {
         const std::int32_t seg0 = (lc.candCount > 0U) ? lc.cands[0].segIdx : -1;
         outNodeVisitNum = trk.IncrementNodeVisit(lc.depth, lc.thkFileIdx, lc.nodeArrIdx, seg0);
 
-        auto tryRuleList = [&](const std::vector<ThkRule>& rules, bool& handledByVanillaRule) -> bool {
+        auto tryRuleList = [&](const std::vector<ThkRule>& rules,
+                               const std::vector<ThkNamedContext>* contexts,
+                               bool& handledByVanillaRule) -> bool {
             for (const auto& rule : rules) {
                 if (!IsRuleActive(rule) || rule.stepCount == 0U) continue;
-                if (!MatchesFilter(rule.filter, lc)) continue;
+                if (!MatchesFilter(rule.filter, lc, trk, contexts)) continue;
 
-                RuleCounterEntry* rc = trk.GetOrCreateRuleCounter(rule.ruleId);
+                const bool needCounter = RuleNeedsCounter(rule);
+                RuleCounterEntry* rc = needCounter ? trk.GetOrCreateRuleCounter(rule.ruleId) : nullptr;
                 const std::uint32_t matchedNow = rc ? ++rc->matchedCount : 1U;
 
                 if (!CheckGate(rule.gate, matchedNow, outNodeVisitNum, trk.totalDecisions, trk)) {
@@ -728,8 +934,9 @@ struct ThkEngine {
                 }
 
                 // Multi-choice weighted branch (`A(w1)+B(w2)`): defer deterministic roll until lock is released.
-                outWeighted.active      = true;
-                outWeighted.ruleId      = rule.ruleId;
+                outWeighted.active           = true;
+                outWeighted.needsRuleCounter = needCounter;
+                outWeighted.ruleId           = rule.ruleId;
                 outWeighted.condId      = rule.condId;
                 outWeighted.stepIdx     = stepIdx;
                 outWeighted.nodeVisit   = outNodeVisitNum;
@@ -747,9 +954,9 @@ struct ThkEngine {
         };
 
         bool explicitVanilla = false;
-        if (tryRuleList(customRules, explicitVanilla)) return;
+        if (tryRuleList(customRules, nullptr, explicitVanilla)) return;
         if (!explicitVanilla && !activePresetName.empty()) {
-            if (tryRuleList(presetRules, explicitVanilla)) return;
+            if (tryRuleList(presetRules, &presetContexts, explicitVanilla)) return;
         }
 
         // Neither rule overrode: check whether we should observe vanilla roll for probe/move tracking.
@@ -792,8 +999,10 @@ struct ThkEngine {
         }
 
         MonsterRuntimeTracker& trk = TouchTracker(lc.monsterPtr, lc.monsterId);
-        if (RuleCounterEntry* rc = trk.GetOrCreateRuleCounter(pick.ruleId)) {
-            ++rc->firedCount;
+        if (pick.needsRuleCounter) {
+            if (RuleCounterEntry* rc = trk.GetOrCreateRuleCounter(pick.ruleId)) {
+                ++rc->firedCount;
+            }
         }
 
         const std::int32_t resolved = pick.candIdx[chosenOpt];
@@ -816,7 +1025,7 @@ struct ThkEngine {
         if (chosenCandIdx >= 0 && static_cast<std::size_t>(chosenCandIdx) < lc.candCount) {
             const auto& chosen = lc.cands[chosenCandIdx];
             if (chosen.targetThkFile >= 0 && chosen.targetNodeId >= 0) {
-                trk.IncrementMoveHit(chosen.targetThkFile, chosen.targetNodeId, false);
+                trk.RecordMoveExecution(lc, chosen, false);
             }
         }
         if (ShouldProbeMonster(lc.monsterId)) {

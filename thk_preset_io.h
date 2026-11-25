@@ -16,11 +16,12 @@
 namespace thk {
 
 struct ThkPresetDocument {
-    std::string              name{};
-    std::string              desc{};
-    std::string              descEn{};
-    std::vector<std::string> defaultDisabledTags{};
-    std::vector<ThkRule>     rules{};
+    std::string                  name{};
+    std::string                  desc{};
+    std::string                  descEn{};
+    std::vector<std::string>     defaultDisabledTags{};
+    std::vector<ThkNamedContext> contexts{};
+    std::vector<ThkRule>         rules{};
 };
 
 inline std::string TrimAscii(const std::string& s) {
@@ -61,6 +62,35 @@ inline bool ParseIntList(const std::string& s, std::int32_t* outArr, std::size_t
             std::int32_t v = 0;
             if (!ParseSignedIntStrict(item, v)) return false;
             if (outCount < maxCap) outArr[outCount++] = v;
+        }
+        if (comma == std::string::npos) break;
+        pos = comma + 1U;
+    }
+    return outCount > 0U;
+}
+
+inline bool ParseMoveList(const std::string& s,
+                          std::int32_t* outFiles,
+                          std::int32_t* outNodes,
+                          std::size_t maxCap,
+                          std::uint8_t& outCount) {
+    outCount = 0U;
+    const std::string t = TrimAscii(s);
+    if (t.empty() || t == "*" || LowerAscii(t) == "any") return true;
+    std::size_t pos = 0U;
+    while (pos <= t.size()) {
+        const std::size_t comma = t.find(',', pos);
+        const std::string item = TrimAscii(comma == std::string::npos ? t.substr(pos) : t.substr(pos, comma - pos));
+        if (!item.empty()) {
+            const std::size_t colon = item.find(':');
+            if (colon == std::string::npos) return false;
+            std::int32_t tf = -1, tn = -1;
+            if (!ParseSignedIntStrict(TrimAscii(item.substr(0U, colon)), tf) || tf < 0) return false;
+            if (!ParseSignedIntStrict(TrimAscii(item.substr(colon + 1U)), tn) || tn < 0) return false;
+            if (outCount >= maxCap) return false;
+            outFiles[outCount] = tf;
+            outNodes[outCount] = tn;
+            ++outCount;
         }
         if (comma == std::string::npos) break;
         pos = comma + 1U;
@@ -289,7 +319,9 @@ inline bool ParsePresetFromText(const std::string& content,
 
         const std::size_t eq = trimmed.find('=');
         const std::string lowerHead = LowerAscii(trimmed);
-        if (lowerHead.rfind("rule ", 0U) != 0U && lowerHead.rfind("rule\t", 0U) != 0U && eq != std::string::npos) {
+        if (lowerHead.rfind("rule ", 0U) != 0U && lowerHead.rfind("rule\t", 0U) != 0U &&
+            lowerHead.rfind("ctx ", 0U) != 0U && lowerHead.rfind("ctx\t", 0U) != 0U &&
+            eq != std::string::npos) {
             const std::string k = LowerAscii(TrimAscii(trimmed.substr(0U, eq)));
             const std::string v = TrimAscii(trimmed.substr(eq + 1U));
             if (k == "name") { outDoc.name = v; continue; }
@@ -310,7 +342,88 @@ inline bool ParsePresetFromText(const std::string& content,
 
         const auto toks = TokenizeRuleLine(trimmed);
         if (toks.empty()) continue;
-        if (LowerAscii(toks[0]) != "rule") {
+        const std::string headLow = LowerAscii(toks[0]);
+        if (headLow == "ctx") {
+            if (toks.size() < 3U || toks[1].find('=') != std::string::npos) {
+                outErr = "line " + std::to_string(lineNo) + ": expected `ctx <name> <key=val>...`";
+                return false;
+            }
+            const std::string ctxNameLow = LowerAscii(TrimAscii(toks[1]));
+            if (ctxNameLow.empty()) {
+                outErr = "line " + std::to_string(lineNo) + ": empty ctx name";
+                return false;
+            }
+            ThkContextSlot slot{};
+            for (std::size_t t = 2U; t < toks.size(); ++t) {
+                const std::string& tok = toks[t];
+                const std::size_t posEq = tok.find('=');
+                if (posEq == std::string::npos) {
+                    outErr = "line " + std::to_string(lineNo) + ": ctx expected key=value near '" + tok + "'";
+                    return false;
+                }
+                const std::string kLow = LowerAscii(tok.substr(0U, posEq));
+                const std::string val  = tok.substr(posEq + 1U);
+                const std::string vLow = LowerAscii(val);
+                if (kLow == "mon" || kLow == "monster") {
+                    if (vLow == "*" || vLow == "any") slot.monsterId = -1;
+                    else if (!ParseSignedIntStrict(vLow, slot.monsterId)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad mon=" + val;
+                        return false;
+                    }
+                } else if (kLow == "d" || kLow == "depth") {
+                    if (vLow == "*" || vLow == "any") slot.depth = -1;
+                    else if (!ParseSignedIntStrict(vLow, slot.depth)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad depth=" + val;
+                        return false;
+                    }
+                } else if (kLow == "f" || kLow == "file") {
+                    if (!ParseIntList(vLow, slot.files, kMaxFilterItems, slot.fileCount)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad file=" + val;
+                        return false;
+                    }
+                } else if (kLow == "node" || kLow == "nodes") {
+                    if (!ParseIntList(vLow, slot.nodes, kMaxFilterItems, slot.nodeCount)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad node=" + val;
+                        return false;
+                    }
+                } else if (kLow == "seg0") {
+                    if (!ParseSeg0Range(vLow, slot.seg0Min, slot.seg0Max)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad seg0=" + val;
+                        return false;
+                    }
+                } else if (kLow == "caller" || kLow == "callers") {
+                    if (!ParseIntList(vLow, slot.callers, kMaxFilterItems, slot.callerCount)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad caller=" + val;
+                        return false;
+                    }
+                } else if (kLow == "move" || kLow == "moves") {
+                    if (!ParseMoveList(vLow, slot.moveFiles, slot.moveNodes, kMaxFilterItems, slot.moveCount)) {
+                        outErr = "line " + std::to_string(lineNo) + ": ctx bad move=" + val;
+                        return false;
+                    }
+                } else {
+                    outErr = "line " + std::to_string(lineNo) + ": unknown ctx key '" + kLow + "'";
+                    return false;
+                }
+            }
+            std::int32_t foundCtx = -1;
+            for (std::size_t ci = 0U; ci < outDoc.contexts.size(); ++ci) {
+                if (ctxNameLow == outDoc.contexts[ci].name) {
+                    foundCtx = static_cast<std::int32_t>(ci);
+                    break;
+                }
+            }
+            if (foundCtx < 0) {
+                ThkNamedContext nc{};
+                CopyTrunc(nc.name, sizeof(nc.name), ctxNameLow.c_str());
+                nc.slots.push_back(slot);
+                outDoc.contexts.push_back(std::move(nc));
+            } else {
+                outDoc.contexts[static_cast<std::size_t>(foundCtx)].slots.push_back(slot);
+            }
+            continue;
+        }
+        if (headLow != "rule") {
             outErr = "line " + std::to_string(lineNo) + ": unknown directive '" + toks[0] + "'";
             return false;
         }
@@ -370,6 +483,51 @@ inline bool ParsePresetFromText(const std::string& content,
                     outErr = "line " + std::to_string(lineNo) + ": bad caller=" + val;
                     return false;
                 }
+            } else if (kLow == "prev" || kLow == "prev_move") {
+                if (!ParseMoveList(vLow, r.filter.prevMoveFiles, r.filter.prevMoveNodes,
+                                   kMaxFilterItems, r.filter.prevMoveCount)) {
+                    outErr = "line " + std::to_string(lineNo) + ": bad prev=" + val;
+                    return false;
+                }
+            } else if (kLow == "prev_d" || kLow == "prev_depth") {
+                if (vLow == "*" || vLow == "any") r.filter.prevDepth = -1;
+                else if (!ParseSignedIntStrict(vLow, r.filter.prevDepth) || r.filter.prevDepth < 0) {
+                    outErr = "line " + std::to_string(lineNo) + ": bad prev_d=" + val;
+                    return false;
+                }
+            } else if (kLow == "prev_f" || kLow == "prev_file") {
+                if (!ParseIntList(vLow, r.filter.prevFiles, kMaxFilterItems, r.filter.prevFileCount)) {
+                    outErr = "line " + std::to_string(lineNo) + ": bad prev_f=" + val;
+                    return false;
+                }
+            } else if (kLow == "prev_node" || kLow == "prev_nodes") {
+                if (!ParseIntList(vLow, r.filter.prevNodes, kMaxFilterItems, r.filter.prevNodeCount)) {
+                    outErr = "line " + std::to_string(lineNo) + ": bad prev_node=" + val;
+                    return false;
+                }
+            } else if (kLow == "prev_seg0") {
+                if (!ParseSeg0Range(vLow, r.filter.prevSeg0Min, r.filter.prevSeg0Max)) {
+                    outErr = "line " + std::to_string(lineNo) + ": bad prev_seg0=" + val;
+                    return false;
+                }
+            } else if (kLow == "prev_caller" || kLow == "prev_callers") {
+                if (!ParseIntList(vLow, r.filter.prevCallers, kMaxFilterItems, r.filter.prevCallerCount)) {
+                    outErr = "line " + std::to_string(lineNo) + ": bad prev_caller=" + val;
+                    return false;
+                }
+            } else if (kLow == "prev_ctx") {
+                std::int32_t foundCtx = -1;
+                for (std::size_t ci = 0U; ci < outDoc.contexts.size(); ++ci) {
+                    if (vLow == outDoc.contexts[ci].name) {
+                        foundCtx = static_cast<std::int32_t>(ci);
+                        break;
+                    }
+                }
+                if (foundCtx < 0) {
+                    outErr = "line " + std::to_string(lineNo) + ": unknown prev_ctx '" + val + "'";
+                    return false;
+                }
+                r.filter.prevCtxId = foundCtx;
             } else if (kLow == "seq" || kLow == "target") {
                 if (!ParseSequenceSteps(val, r)) {
                     outErr = "line " + std::to_string(lineNo) + ": bad seq/target=" + val;

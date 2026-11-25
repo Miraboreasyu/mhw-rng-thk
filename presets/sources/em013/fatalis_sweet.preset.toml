@@ -1,0 +1,377 @@
+# ============================================================================
+# Declarative Semantic Preset: Fatalis Sweet (Hunter-Friendly, TOML v3.3 `[[rules]]`)
+# Paired with `em013.thkmeta.toml` + `em013.groups.toml`.
+# Showcases pure TOML 1.0 `[[rules]]`, `ban`/`allow`, `fallback = true`, and 3-valued `!=`.
+# ============================================================================
+meta    = "em013.thkmeta.toml"
+groups  = "em013.groups.toml"
+name    = "fatalis_sweet"
+desc    = "黑龙(em013)全阶段好打版预设（v3.3 声明式：必派扇火/禁非必要龙车与转态/P2首转孕吐/P3白给招/空战S火）"
+desc_en = "Fatalis (em013) Hunter-Friendly Easy Preset (v3.3 Declarative)"
+
+# ============================================================================
+# 1. 空中状态：玩家在地面且距离满足时一定出空中 S 火 (`fly_zigzag_breath`)
+#    + 空中钩爪反击不出转四足下压，改出空中 S 火
+# ============================================================================
+[[rules]]
+when = { stance = "fly", has = "fly_zigzag_breath" }
+do = "fly_zigzag_breath"
+label = "空中距离满足 100% 空中S火"
+label_en = "Fly Ground In-Range 100% Zigzag S-Breath"
+
+[[rules]]
+followup = "fly_switch_l2_assault_start"
+when = { has = "fly_zigzag_breath" }
+do = "fly_zigzag_breath"
+label = "空中钩爪反击 100% 空中S火"
+label_en = "Fly Clutch Counter 100% Zigzag S-Breath"
+
+# ============================================================================
+# 2. 姿态切换与全局禁车门控（除必要转态外二足不转四足；P2 首次转四足必孕吐）
+# ============================================================================
+[[rules]]
+when = { context = "stance_check", p1 = "bi" }
+do = "cancel"
+label = "P1 二足不转四足"
+label_en = "P1 Bipedal Hold Stance"
+
+# P2/P3 首次触发 var_0>=7 近身转态检查 (`dist <= 1000`) -> ENDR = 孕吐转四足 (`until = 1`)
+[[rules]]
+when = { stage = "!= 0", context = "stance_check", stance = "bi", dist = "<= 1000" }
+do = "cancel"
+until = 1
+label = "P2 首次转四足必用孕吐转"
+label_en = "P2 1st Switch Quad via Cone"
+
+[[rules]]
+when = { context = "extra_charge", p1 = "bi" }
+do = "cancel"
+label = "P1 二足取消 15% 额外龙车"
+label_en = "P1 Cancel 15% Extra Charge"
+
+# 高低差 (`abs_dy>300`) 门控点禁用龙车与转态下压（覆盖二足与四足共 5 个点）
+[[rules]]
+when = { expr = "abs_dy>300" }
+ban = ["rush", "l2_switch_l4_body_press"]
+label = "高低差禁用龙车与下压"
+label_en = "Elevation Ban Rush/BodyPress"
+
+# ============================================================================
+# 3. d=1 派生与钩爪反击：P1/P2 扇火招 100% 派生扇火；钩爪反击禁龙车与下压
+# ============================================================================
+[[rules]]
+followup = "l2_under_breath"
+from = { phase = ["p1", "p2"] }
+do = "trigger"
+label = "P1/P2 孕吐 100% 派生扇火"
+label_en = "P1/P2 UnderBreath 100% Cone Chain"
+
+[[rules]]
+followup = "l2_near_side_scratch"
+from = { phase = ["p1", "p2"] }
+do = "trigger"
+label = "P1/P2 横抓 100% 派生扇火"
+label_en = "P1/P2 SideScratch 100% Cone Chain"
+
+[[rules]]
+followup = "l2_quick_breath"
+from = { phase = ["p1", "p2"] }
+do = "trigger"
+label = "P1/P2 单口火 100% 派生扇火"
+label_en = "P1/P2 QuickBreath 100% Cone Chain"
+
+[[rules]]
+followup = "l2_switch_l4_body_press"
+ban = ["rush", "l2_switch_l4_body_press"]
+label = "二足钩爪反击禁车禁下压"
+label_en = "Bi Clutch Counter Ban Rush/Press"
+
+[[rules]]
+followup = ["l4_far_dust_explosion_start", "l4_far_fire_bite", "l4_short_bite"]
+ban = "rush"
+label = "四足钩爪反击禁龙车"
+label_en = "Quad Clutch Counter Ban Rush"
+
+# ============================================================================
+# 4. P1 & P2 四足：远距离只出三火球或 180 扫火；近距离优先 180 扫火 -> 大咬 -> 禁车兜底
+# ============================================================================
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "quad", dist = ">= 1500" }
+allow = ["l4_breath_multi_start_01", "l4_front_swing_breath"]
+label = "P1/P2 四足远距仅三火球或180扫火"
+label_en = "P1/P2 Quad Far Allow Triple/180Sweep"
+
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "quad", dist = "<= 1500" }
+do = "l4_front_swing_breath"
+label = "P1/P2 四足近距 180扫火"
+label_en = "P1/P2 Quad Close 180 Sweep"
+
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "quad", dist = "<= 1500" }
+fallback = true
+do = "l4_near_fire_bite"
+label = "P1/P2 四足近距兜底 大咬"
+label_en = "P1/P2 Quad Close Fallback Big Bite"
+
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "quad", dist = "<= 1500" }
+fallback = true
+ban = "rush"
+label = "P1/P2 四足近距禁车"
+label_en = "P1/P2 Quad Close Fallback Ban Rush"
+
+# ============================================================================
+# 5. P3 四足：身侧 360 火；身前近距三连蓄力火；其余点禁龙车
+# ============================================================================
+[[rules]]
+when = { p3 = "quad", angle = "in 30..150 | -150..-30", has = "l4_all_angle_breath_l" }
+do = "l4_all_angle_breath_l"
+label = "P3 四足身侧 100% 360火"
+label_en = "P3 Quad Side 100% 360 Fire"
+
+[[rules]]
+when = { p3 = "quad", angle = "in -30..30", dist = "<= 1500", has = "l4_switch_l2_high_power_three_breath_multi_start" }
+do = "l4_switch_l2_high_power_three_breath_multi_start"
+label = "P3 四足身前近距 100% 三连蓄力火"
+label_en = "P3 Quad Front Close 100% Triple Charge"
+
+[[rules]]
+when = { p3 = "quad" }
+fallback = true
+ban = "rush"
+label = "P3 四足其余点禁龙车"
+label_en = "P3 Quad Fallback Ban Rush"
+
+# ============================================================================
+# 5.5 全阶段二足联动：上一招为二足背面甩尾且处于远程范围 -> 必出单火球或三火球
+# ============================================================================
+[[rules]]
+when = { stance = "bi", dist = ">= 900", expr = "has=l2_breath_single | has=l2_high_power_three_breath_multi_start" }
+prev_move = "l2_tail_swing"
+allow = ["l2_breath_single", "l2_high_power_three_breath_multi_start"]
+label = "二足甩尾后远程 必出单火球或三火球"
+label_en = "Bi After TailSwing Far -> 1FB/3FB"
+
+# ============================================================================
+# 6. P3 二足：远程扇火/连段扇火/三连蓄力火；近战禁车禁下压转四足
+# ============================================================================
+[[rules]]
+label = "P3 二足远程 扇火/连段扇火/三连蓄力火"
+label_en = "P3 Bi Far Cone/ChainCone/TripleCharge"
+[rules.when]
+p3 = "bi"
+dist = ">= 900"
+has = "l2_vertical_escape_dust_explosion_start_chain"
+[rules.do]
+l2_special_wide_range_fire_shoot = 40
+l2_vertical_escape_dust_explosion_start_chain = 25
+l2_high_power_three_breath_multi_start = 35
+
+[[rules]]
+when = { p3 = "bi", dist = ">= 900" }
+fallback = true
+allow = ["l2_special_wide_range_fire_shoot", "l2_high_power_three_breath_multi_start"]
+label = "P3 二足远程侧面/超远 扇火/三连蓄力火"
+label_en = "P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+
+[[rules]]
+when = { p3 = "bi", dist = "<= 1000" }
+ban = ["l2_switch_l4_body_press", "l2_new_catch_attack_start", "l2_near_scratch"]
+label = "P3 二足近战禁下压禁抓(保<=8候选)"
+label_en = "P3 Bi Close Ban Press/Pin/Claw"
+
+# ============================================================================
+# 7. P1 & P2 二足主力控招 + 上一招联动 (`prev_move`) + 跨阶段兜底禁车禁转态
+#    - 正面远程：扇火30 / 连段扇火30 / 三火球20 / 单火球20；上招单火球 -> 必出S火
+#    - 侧面远程：高扇火(55) + 三火球(20) + 单火球(15) + 低侧地毯(10)
+#    - 近战(<=1000)：大幅压低孕吐(2%)；P2未出过quick_breath时高概率出(必派扇火)
+# ============================================================================
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "bi", has = "l2_snake_fire_shoot" }
+prev_move = "l2_breath_single"
+do = "l2_snake_fire_shoot"
+label = "P1/P2 上招单火球 必出S火"
+label_en = "P1/P2 After SingleFB -> SnakeFire"
+
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "bi", has = "l2_special_wide_range_fire_shoot" }
+prev_move = "l2_quick_breath"
+do = "l2_special_wide_range_fire_shoot"
+label = "P1/P2 单口火后远程 必出扇火"
+label_en = "P1/P2 After QuickBreath Far -> Cone"
+
+# 7.1 P1/P2 二足远程 (dist >= 900)
+[[rules]]
+label = "P1/P2 二足正背远程 扇30连30三20单20"
+label_en = "P1/P2 Bi Far FB Cone30/Chain30/3FB20/1FB20"
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = ">= 900"
+has = "l2_vertical_escape_dust_explosion_start_chain"
+[rules.do]
+l2_special_wide_range_fire_shoot = 30
+l2_vertical_escape_dust_explosion_start_chain = 30
+l2_high_power_three_breath_multi_start = 20
+l2_breath_single = 20
+
+[[rules]]
+label = "P1/P2 二足侧面远程 高扇火低侧地毯"
+label_en = "P1/P2 Bi Far Side HighCone LowCarpet"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = ">= 900"
+expr = "has=l2_special_wide_range_fire_shoot & has=l2_far_dust_explosion_start"
+[rules.do]
+l2_special_wide_range_fire_shoot = 55
+l2_high_power_three_breath_multi_start = 20
+l2_breath_single = 15
+l2_far_dust_explosion_start = 10
+
+[[rules]]
+label = "P1/P2 二足其余远程 扇60三20单20"
+label_en = "P1/P2 Bi Far Other Cone60/3FB20/1FB20"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = ">= 900"
+has = "l2_special_wide_range_fire_shoot"
+[rules.do]
+l2_special_wide_range_fire_shoot = 60
+l2_high_power_three_breath_multi_start = 20
+l2_breath_single = 20
+
+# 7.2 P1/P2 二足近战 (dist <= 1000)：先处理未出过 quick_breath 的 P2 节点，再按 P1 类同权重压低孕吐
+[[rules]]
+label = "P2 二足近战(未单口火) 侧面含低侧地毯"
+label_en = "P2 Bi Close Pre-QB Side"
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = "<= 1000"
+expr = "has=l2_quick_breath & has=l2_far_dust_explosion_start"
+[rules.do]
+l2_quick_breath = 38
+l2_near_scratch = 18
+l2_near_side_scratch = 15
+l2_line_fire_shoot = 12
+l2_snake_fire_shoot = 9
+l2_far_dust_explosion_start = 6
+l2_under_breath = 2
+
+[[rules]]
+label = "P2 二足近战(未单口火) 背面含甩尾"
+label_en = "P2 Bi Close Pre-QB Back"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = "<= 1000"
+expr = "has=l2_quick_breath & has=l2_tail_swing"
+[rules.do]
+l2_quick_breath = 35
+l2_near_scratch = 18
+l2_near_side_scratch = 15
+l2_line_fire_shoot = 12
+l2_tail_swing = 10
+l2_snake_fire_shoot = 8
+l2_under_breath = 2
+
+[[rules]]
+label = "P2 二足近战(未单口火) 正面"
+label_en = "P2 Bi Close Pre-QB Front"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = "<= 1000"
+has = "l2_quick_breath"
+[rules.do]
+l2_quick_breath = 40
+l2_near_scratch = 20
+l2_near_side_scratch = 15
+l2_line_fire_shoot = 13
+l2_snake_fire_shoot = 10
+l2_under_breath = 2
+
+[[rules]]
+label = "P1/P2 二足近战(常态) 侧面低孕吐"
+label_en = "P1/P2 Bi Close Normal Side LowCone"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = "<= 1000"
+expr = "has=l2_under_breath & has=l2_far_dust_explosion_start"
+[rules.do]
+l2_near_scratch = 26
+l2_near_side_scratch = 22
+l2_line_fire_shoot = 20
+l2_snake_fire_shoot = 20
+l2_far_dust_explosion_start = 10
+l2_under_breath = 2
+
+[[rules]]
+label = "P1/P2 二足近战(常态) 背面低孕吐"
+label_en = "P1/P2 Bi Close Normal Back LowCone"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = "<= 1000"
+expr = "has=l2_under_breath & has=l2_tail_swing"
+[rules.do]
+l2_near_scratch = 24
+l2_near_side_scratch = 20
+l2_line_fire_shoot = 20
+l2_tail_swing = 20
+l2_snake_fire_shoot = 14
+l2_under_breath = 2
+
+[[rules]]
+label = "P1/P2 二足近战(常态) 正面低孕吐"
+label_en = "P1/P2 Bi Close Normal Front LowCone"
+fallback = true
+[rules.when]
+phase = ["p1", "p2"]
+stance = "bi"
+dist = "<= 1000"
+has = "l2_under_breath"
+[rules.do]
+l2_near_scratch = 32
+l2_near_side_scratch = 22
+l2_line_fire_shoot = 24
+l2_snake_fire_shoot = 20
+l2_under_breath = 2
+
+# 7.3 P1/P2 二足其余点(>4500 超远等) + 跨阶段特殊入口禁车禁转态
+[[rules]]
+when = { phase = ["p1", "p2"], stance = "bi" }
+fallback = true
+ban = ["rush", "l2_switch_l4_body_press"]
+label = "P1/P2 二足其余点位禁车禁下压"
+label_en = "P1/P2 Bi Other Fallback Ban Rush/Press"
+
+[[rules]]
+when = { context = "occluded", stance = "bi" }
+ban = "rush"
+label = "二足遮挡禁车"
+label_en = "Bi Occluded Ban Rush"
+
+[[rules]]
+when = { expr = "em_104=1" }
+ban = "rush"
+label = "击龙枪高台墙面禁车"
+label_en = "Dragonator Wall Ban Rush"
+
+[[rules]]
+when = { expr = "em_110=2" }
+fallback = true
+ban = "rush"
+skip_if_all_banned = true
+label = "em_110=2 可替代点禁车(保留4强制单车点)"
+label_en = "em_110 Fallback Ban Rush (Keep Solo)"

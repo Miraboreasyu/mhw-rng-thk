@@ -1,0 +1,314 @@
+# ============================================================================
+# Auto-Compiled Low-Level THK Preset (standalone from TOML meta + groups)
+# Compatible directly with `rng_thk.dll` (`thk_preset_io.h`).
+# ============================================================================
+name = fatalis_sweet
+desc = 黑龙(em013)全阶段好打版预设（v3.3 声明式：必派扇火/禁非必要龙车与转态/P2首转孕吐/P3白给招/空战S火）
+desc_en = Fatalis (em013) Hunter-Friendly Easy Preset (v3.3 Declarative)
+
+# [#1 Fly Ground In-Range 100% Zigzag S-Breath] sel=[stance=fly has=fly_zigzag_breath] do=fly_zigzag_breath | 6 d=0 pts -> 55:243
+rule mon=101 d=0 f=0,4 node=21 seg0=71..77 -> 55:243 label="空中距离满足 100% 空中S火" label_en="Fly Ground In-Range 100% Zigzag S-Breath"
+rule mon=101 d=0 f=0,4 node=66,67,70,71 seg0=* -> 55:243 label="空中距离满足 100% 空中S火" label_en="Fly Ground In-Range 100% Zigzag S-Breath"
+# [#2 Fly Clutch Counter 100% Zigzag S-Breath] sel=[d=1 in=fly_switch_l2_assault_start has=fly_zigzag_breath] do=fly_zigzag_breath | 1 d=1 pts -> seg:6
+rule mon=101 d=1 f=55 node=6 caller=0 seg0=* -> seg:6 label="空中钩爪反击 100% 空中S火" label_en="Fly Clutch Counter 100% Zigzag S-Breath"
+# [#3 P1 Bipedal Hold Stance] sel=[context=stance_check p1=bi] do=cancel | 2 d=0 pts -> ENDR
+rule mon=101 d=0 f=0,4 node=14 seg0=22 -> ENDR label="P1 二足不转四足" label_en="P1 Bipedal Hold Stance"
+rule mon=101 d=0 f=0,4 node=15 seg0=14 -> ENDR label="P1 二足不转四足" label_en="P1 Bipedal Hold Stance"
+# [#4 P2 1st Switch Quad via Cone] sel=[stage!=0 context=stance_check stance=bi dist<=1000] do=cancel | 1 d=0 pts -> ENDR
+rule mon=101 d=0 f=0,4 node=16 seg0=* -> ENDR label="P2 首次转四足必用孕吐转" label_en="P2 1st Switch Quad via Cone" until=1
+# [#5 P1 Cancel 15% Extra Charge] sel=[context=extra_charge p1=bi] do=cancel | 1 d=0 pts -> ENDR
+rule mon=101 d=0 f=0,4 node=18 seg0=* -> ENDR label="P1 二足取消 15% 额外龙车" label_en="P1 Cancel 15% Extra Charge"
+# [#6 Elevation Ban Rush/BodyPress] sel=[abs_dy>300] ban=ban(rush,l2_switch_l4_body_press) | 5 d=0 pts acted=5/5 -> ELSER,ENDR
+rule mon=101 d=0 f=0,4 node=23 seg0=3 -> ELSER label="高低差禁用龙车与下压" label_en="Elevation Ban Rush/BodyPress"
+rule mon=101 d=0 f=0,4 node=23 seg0=9+ -> ENDR label="高低差禁用龙车与下压" label_en="Elevation Ban Rush/BodyPress"
+rule mon=101 d=0 f=0,4 node=24 seg0=* -> ELSER label="高低差禁用龙车与下压" label_en="Elevation Ban Rush/BodyPress"
+# [#7 P1/P2 UnderBreath 100% Cone Chain] sel=[d=1 in=l2_under_breath from=((phase=p1|phase=p2))] do=trigger | 1 d=1 pts | followup=l2_under_breath [55:186,55:297] => 55:297
+rule mon=101 d=1 f=55 node=87 caller=75,76,129,130 seg0=* -> RANDOM label="P1/P2 孕吐 100% 派生扇火" label_en="P1/P2 UnderBreath 100% Cone Chain"
+# [#8 P1/P2 SideScratch 100% Cone Chain] sel=[d=1 in=l2_near_side_scratch from=((phase=p1|phase=p2))] do=trigger | 1 d=1 pts | followup=l2_near_side_scratch [55:173,55:298] => 55:298
+rule mon=101 d=1 f=55 node=76 caller=75,76,81,82,86,87,129,130 seg0=* -> RANDOM label="P1/P2 横抓 100% 派生扇火" label_en="P1/P2 SideScratch 100% Cone Chain"
+rule mon=101 d=1 f=55 node=76 caller=135,136,140,141 seg0=* -> RANDOM label="P1/P2 横抓 100% 派生扇火" label_en="P1/P2 SideScratch 100% Cone Chain"
+# [#9 P1/P2 QuickBreath 100% Cone Chain] sel=[d=1 in=l2_quick_breath from=((phase=p1|phase=p2))] do=trigger | 1 d=1 pts | followup=l2_quick_breath [55:286,55:299] => 55:299
+rule mon=101 d=1 f=55 node=72 caller=81,82,135,136 seg0=* -> RANDOM label="P1/P2 单口火 100% 派生扇火" label_en="P1/P2 QuickBreath 100% Cone Chain"
+# [#10 Bi Clutch Counter Ban Rush/Press] sel=[d=1 in=l2_switch_l4_body_press] ban=ban(rush,l2_switch_l4_body_press) | 3 d=1 pts acted=3/3 -> seg:2(30)+seg:3(30),seg:1(20)+seg:2(20)+seg:3(20)
+rule mon=101 d=1 f=55 node=7 caller=0 seg0=* -> seg:2(30)+seg:3(30) label="二足钩爪反击禁车禁下压" label_en="Bi Clutch Counter Ban Rush/Press"
+rule mon=101 d=1 f=55 node=8 caller=0 seg0=* -> seg:2(30)+seg:3(30) label="二足钩爪反击禁车禁下压" label_en="Bi Clutch Counter Ban Rush/Press"
+rule mon=101 d=1 f=55 node=9 caller=0 seg0=* -> seg:1(20)+seg:2(20)+seg:3(20) label="二足钩爪反击禁车禁下压" label_en="Bi Clutch Counter Ban Rush/Press"
+# [#11 Quad Clutch Counter Ban Rush] sel=[d=1 in=l4_far_dust_explosion_start|l4_far_fire_bite|l4_short_bite] ban=ban(rush) | 6 d=1 pts acted=6/6 -> seg:1(15)+seg:3(25)+seg:4(20),seg:8(15)+seg:10(25)+seg:11(20),seg:1(20)+seg:3(15)+seg:5(25),seg:9(20)+seg:11(15)+seg:13(25),seg:2(25)+seg:3(20)+seg:4(15),seg:9(25)+seg:10(20)+seg:11(15)
+rule mon=101 d=1 f=55 node=10 caller=0 seg0=1 -> seg:1(15)+seg:3(25)+seg:4(20) label="四足钩爪反击禁龙车" label_en="Quad Clutch Counter Ban Rush"
+rule mon=101 d=1 f=55 node=10 caller=0 seg0=8 -> seg:8(15)+seg:10(25)+seg:11(20) label="四足钩爪反击禁龙车" label_en="Quad Clutch Counter Ban Rush"
+rule mon=101 d=1 f=55 node=11 caller=0 seg0=1 -> seg:1(20)+seg:3(15)+seg:5(25) label="四足钩爪反击禁龙车" label_en="Quad Clutch Counter Ban Rush"
+rule mon=101 d=1 f=55 node=11 caller=0 seg0=9 -> seg:9(20)+seg:11(15)+seg:13(25) label="四足钩爪反击禁龙车" label_en="Quad Clutch Counter Ban Rush"
+rule mon=101 d=1 f=55 node=12 caller=0 seg0=1 -> seg:2(25)+seg:3(20)+seg:4(15) label="四足钩爪反击禁龙车" label_en="Quad Clutch Counter Ban Rush"
+rule mon=101 d=1 f=55 node=12 caller=0 seg0=8 -> seg:9(25)+seg:10(20)+seg:11(15) label="四足钩爪反击禁龙车" label_en="Quad Clutch Counter Ban Rush"
+# [#12 P1/P2 Quad Far Allow Triple/180Sweep] sel=[(phase=p1|phase=p2) stance=quad dist>=1500] allow=allow(l4_breath_multi_start_01,l4_front_swing_breath) | 48 d=0 pts acted=48/48 -> 55:221(20)+55:192(35),55:221(10)+55:192(35),55:221,55:221(25)+55:192(35),55:221(30)+55:192(35),55:221(15)+55:192(35),55:221(10)+55:192(30),55:221(25)+55:192(45),55:221(30)+55:192(30),55:221(20)+55:192(30),55:221(30)+55:192(40),55:221(15)+55:192(30),55:221(20)+55:192(15),55:221(10)+55:192(40),55:221(10)+55:192(45),55:221(25)+55:192(20)
+rule mon=101 d=0 f=0,4 node=28 seg0=120..127 -> 55:221(20)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=28 seg0=134 -> 55:221(10)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=28 seg0=143 -> 55:221 label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=29 seg0=96 -> 55:221(25)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=29 seg0=103 -> 55:221(30)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=29 seg0=109 -> 55:221(15)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=29 seg0=117 -> 55:221 label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=47 seg0=2..9 -> 55:221(10)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=47 seg0=34 -> 55:221(10)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=47 seg0=16..26 -> 55:221(10)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=47 seg0=41 -> 55:221(10)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=107 seg0=1..9 -> 55:221(20)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=107 seg0=16 -> 55:221(10)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=108,119,162,167,173 seg0=* -> 55:221 label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=112 seg0=* -> 55:221(25)+55:192(45) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=113 seg0=* -> 55:221(30)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=118,172 seg0=1 -> 55:221(20)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=118 seg0=9 -> 55:221(20)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=118 seg0=16 -> 55:221(10)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=161 seg0=1..9 -> 55:221(25)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=161 seg0=16 -> 55:221(15)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=166 seg0=1..7 -> 55:221(30)+55:192(40) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=166 seg0=13 -> 55:221(20)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=172 seg0=9 -> 55:221(25)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=172 seg0=16 -> 55:221(15)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=203 seg0=5..12 -> 55:221(10)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=203 seg0=19 -> 55:221(10)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=204,215 seg0=* -> 55:221(20)+55:192(15) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=208 seg0=1 -> 55:221(10)+55:192(40) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=208 seg0=7 -> 55:221(10)+55:192(45) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=208 seg0=13 -> 55:221(10)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=209 seg0=* -> 55:221(25)+55:192(20) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=214 seg0=1..8 -> 55:221(10)+55:192(35) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+rule mon=101 d=0 f=0,4 node=214 seg0=15 -> 55:221(10)+55:192(30) label="P1/P2 四足远距仅三火球或180扫火" label_en="P1/P2 Quad Far Allow Triple/180Sweep"
+# [#13 P1/P2 Quad Close 180 Sweep] sel=[(phase=p1|phase=p2) stance=quad dist<=1500] do=l4_front_swing_breath | 64 d=0 pts -> 55:192
+rule mon=101 d=0 f=0,4 node=28 seg0=2..9 -> 55:192 label="P1/P2 四足近距 180扫火" label_en="P1/P2 Quad Close 180 Sweep"
+rule mon=101 d=0 f=0,4 node=29 seg0=2..86 -> 55:192 label="P1/P2 四足近距 180扫火" label_en="P1/P2 Quad Close 180 Sweep"
+rule mon=101 d=0 f=0,4 node=104,115 seg0=1..8 -> 55:192 label="P1/P2 四足近距 180扫火" label_en="P1/P2 Quad Close 180 Sweep"
+rule mon=101 d=0 f=0,4 node=109,163,200,201,202,205,206,207 seg0=* -> 55:192 label="P1/P2 四足近距 180扫火" label_en="P1/P2 Quad Close 180 Sweep"
+rule mon=101 d=0 f=0,4 node=211,212,213 seg0=* -> 55:192 label="P1/P2 四足近距 180扫火" label_en="P1/P2 Quad Close 180 Sweep"
+# [#14 P1/P2 Quad Close Fallback Big Bite] sel=[(phase=p1|phase=p2) stance=quad dist<=1500] fallback(68/108) do=l4_near_fire_bite | 68 d=0 pts -> 55:178
+rule mon=101 d=0 f=0,4 node=28 seg0=26..108 -> 55:178 label="P1/P2 四足近距兜底 大咬" label_en="P1/P2 Quad Close Fallback Big Bite"
+rule mon=101 d=0 f=0,4 node=105,106,110,111,116,117,160,164 seg0=* -> 55:178 label="P1/P2 四足近距兜底 大咬" label_en="P1/P2 Quad Close Fallback Big Bite"
+rule mon=101 d=0 f=0,4 node=165,171 seg0=* -> 55:178 label="P1/P2 四足近距兜底 大咬" label_en="P1/P2 Quad Close Fallback Big Bite"
+rule mon=101 d=0 f=0,4 node=159,170 seg0=1..21 -> 55:178 label="P1/P2 四足近距兜底 大咬" label_en="P1/P2 Quad Close Fallback Big Bite"
+rule mon=101 d=0 f=0,4 node=159,170 seg0=41 -> 55:178 label="P1/P2 四足近距兜底 大咬" label_en="P1/P2 Quad Close Fallback Big Bite"
+# [#15 P1/P2 Quad Close Fallback Ban Rush] sel=[(phase=p1|phase=p2) stance=quad dist<=1500] fallback(11/91) ban=ban(rush) | 11 d=0 pts acted=91/143,noop=52 -> 55:189(40)+55:277(25),55:277,55:177(5)+55:217(30)+55:176(20)+55:277(10)
+rule mon=101 d=0 f=0,4 node=28 seg0=16 -> 55:189(40)+55:277(25) label="P1/P2 四足近距禁车" label_en="P1/P2 Quad Close Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=104,115 seg0=15 -> 55:189(40)+55:277(25) label="P1/P2 四足近距禁车" label_en="P1/P2 Quad Close Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=158,169 seg0=1..7 -> 55:277 label="P1/P2 四足近距禁车" label_en="P1/P2 Quad Close Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=158,169 seg0=13 -> 55:189(40)+55:277(25) label="P1/P2 四足近距禁车" label_en="P1/P2 Quad Close Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=159,170 seg0=31 -> 55:177(5)+55:217(30)+55:176(20)+55:277(10) label="P1/P2 四足近距禁车" label_en="P1/P2 Quad Close Fallback Ban Rush"
+# [#16 P3 Quad Side 100% 360 Fire] sel=[p3=quad angle=30..150|-150..-30 has=l4_all_angle_breath_l] do=l4_all_angle_breath_l | 33 d=0 pts -> 55:276
+rule mon=101 d=0 f=0,4 node=30 seg0=13 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=30 seg0=29..37 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=30 seg0=53 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=30 seg0=71..79 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=30 seg0=95 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=30 seg0=121 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=47 seg0=68 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=121,217 seg0=16 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=122,176,218 seg0=11..22 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=122,176,218 seg0=44 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=123,177 seg0=13..26 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=123,177 seg0=52 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=124,178 seg0=18 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=175 seg0=14 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=219 seg0=12..24 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=219 seg0=48 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+rule mon=101 d=0 f=0,4 node=220 seg0=17 -> 55:276 label="P3 四足身侧 100% 360火" label_en="P3 Quad Side 100% 360 Fire"
+# [#17 P3 Quad Front Close 100% Triple Charge] sel=[p3=quad angle=-30..30 dist<=1500 has=l4_switch_l2_high_power_three_breath_multi_start] do=l4_switch_l2_high_power_three_breath_multi_start | 6 d=0 pts | l4_switch_l2_high_power_three_breath_multi_start [55:217,55:284] => 55:217
+rule mon=101 d=0 f=0,4 node=122,123,176,177,218,219 seg0=1 -> 55:217 label="P3 四足身前近距 100% 三连蓄力火" label_en="P3 Quad Front Close 100% Triple Charge"
+# [#18 P3 Quad Fallback Ban Rush] sel=[p3=quad] fallback(23/54) ban=ban(rush) | 23 d=0 pts acted=54/71,noop=17 -> 55:180(30)+55:221(10)+55:287(10)+55:276(30),55:180(30)+55:221(10)+55:276(35),55:171(10)+55:192(10)+55:277(40),55:277(25)+55:276(40),55:177(10)+55:217(10)+55:176(10)+55:277(25)+55:276(20),55:177(10)+55:178(5)+55:217(10)+55:176(10)+55:277(20)+55:276(25),55:180(25)+55:221(20)+55:287(10)+55:276(25),55:180(25)+55:221(25)+55:276(25),55:180(35)+55:221(25),55:277,55:277(30)+55:276(35),55:177(5)+55:217(30)+55:176(10)+55:277(5)+55:276(30),55:180(20)+55:221(25)+55:287(10)+55:276(25),55:180(25)+55:221(30)+55:276(25),55:180(35)+55:221(35),55:192(40)+55:277(15),55:192(25)+55:277(10)+55:276(40),55:177(5)+55:178(5)+55:192(25)+55:217(15)+55:176(5)+55:277(5)+55:276(30),55:177(5)+55:178(5)+55:192(10)+55:217(10)+55:176(5)+55:180(20)+55:221(10)+55:276(25),55:180(30)+55:221(15)+55:192(15)+55:276(25),55:180(30)+55:221(20)+55:192(15)
+rule mon=101 d=0 f=0,4 node=47 seg0=51 -> 55:180(30)+55:221(10)+55:287(10)+55:276(30) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=47 seg0=60 -> 55:180(30)+55:221(10)+55:276(35) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=121 seg0=1 -> 55:171(10)+55:192(10)+55:277(40) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=121 seg0=8 -> 55:277(25)+55:276(40) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=122 seg0=33 -> 55:177(10)+55:217(10)+55:176(10)+55:277(25)+55:276(20) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=123 seg0=39 -> 55:177(10)+55:178(5)+55:217(10)+55:176(10)+55:277(20)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=124 seg0=1 -> 55:180(25)+55:221(20)+55:287(10)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=124 seg0=10 -> 55:180(25)+55:221(25)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=125 seg0=* -> 55:180(35)+55:221(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=175 seg0=1 -> 55:277 label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=175 seg0=7 -> 55:277(30)+55:276(35) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=176 seg0=33 -> 55:177(5)+55:217(30)+55:176(10)+55:277(5)+55:276(30) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=177 seg0=39 -> 55:177(5)+55:217(30)+55:176(10)+55:277(5)+55:276(30) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=178 seg0=1 -> 55:180(20)+55:221(25)+55:287(10)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=178 seg0=10 -> 55:180(25)+55:221(30)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=179 seg0=* -> 55:180(35)+55:221(35) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=217 seg0=1 -> 55:192(40)+55:277(15) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=217 seg0=8 -> 55:192(25)+55:277(10)+55:276(40) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=218 seg0=33 -> 55:177(5)+55:178(5)+55:192(25)+55:217(15)+55:176(5)+55:277(5)+55:276(30) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=219 seg0=36 -> 55:177(5)+55:178(5)+55:192(10)+55:217(10)+55:176(5)+55:180(20)+55:221(10)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=220 seg0=1..9 -> 55:180(30)+55:221(15)+55:192(15)+55:276(25) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+rule mon=101 d=0 f=0,4 node=221 seg0=* -> 55:180(30)+55:221(20)+55:192(15) label="P3 四足其余点禁龙车" label_en="P3 Quad Fallback Ban Rush"
+# [#19 Bi After TailSwing Far -> 1FB/3FB] sel=[stance=bi dist>=900 has=l2_breath_single|has=l2_high_power_three_breath_multi_start] prev=[move=l2_tail_swing] allow=allow(l2_breath_single,l2_high_power_three_breath_multi_start) | 136 d=0 pts acted=136/136 -> 55:179,55:220,55:179(30)+55:220(10),55:179(23)+55:220(17),55:179(20)+55:220(15),55:179(25)+55:220(20),55:179(35)+55:220(30),55:179(15)+55:220(15),55:179(20)+55:220(20),55:179(25)+55:220(35),55:179(15)+55:220(25),55:179(40)+55:220(60),55:179(15)+55:220(30),55:179(20)+55:220(35),55:179(15)+55:220(20),55:179(20)+55:220(30),55:179(50)+55:220(10),55:179(45)+55:220(10),55:179(55)+55:220(10)
+rule mon=101 d=0 f=0,4 node=21 seg0=34 -> 55:179|55:220 label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=21 seg0=93 -> 55:179|55:220 label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=46 seg0=* -> 55:179(30)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=77,78 seg0=1 -> 55:179(23)+55:220(17) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=77 seg0=13..38 -> 55:179(20)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=77 seg0=50 -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=78,95 seg0=13+ -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=79,85,96,186,192,198 seg0=* -> 55:179(35)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=83,84,93,94,95 seg0=1 -> 55:179(20)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=83 seg0=13..38 -> 55:179(15)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=83 seg0=50 -> 55:179(20)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=84,94 seg0=13 -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=84,94 seg0=25 -> 55:179(20)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=88,99 seg0=1 -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=88 seg0=46 -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=88 seg0=12..35 -> 55:179(15)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=89,101 seg0=* -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=93 seg0=26..39 -> 55:179(20)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=93 seg0=13 -> 55:179(15)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=93 seg0=52 -> 55:179(20)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=99 seg0=48 -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=99 seg0=12..36 -> 55:179(15)+55:220(15) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=100 seg0=1..12 -> 55:179(25)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=100 seg0=23 -> 55:179(20)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=131 seg0=1 -> 55:179(25)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=131 seg0=49 -> 55:179(25)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=131,137 seg0=12..37 -> 55:179(15)+55:220(25) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=132 seg0=* -> 55:179(25)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=133,139,150 seg0=* -> 55:179(40)+55:220(60) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=137,138,153,154 seg0=1 -> 55:179(15)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=137 seg0=49 -> 55:179(15)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=138,154 seg0=25 -> 55:179(15)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=138 seg0=13 -> 55:179(20)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=142 seg0=1 -> 55:179(20)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=142 seg0=45 -> 55:179(20)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=142 seg0=11..34 -> 55:179(15)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=143,155 seg0=* -> 55:179(20)+55:220(35) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=147,148 seg0=1 -> 55:179(15)+55:220(25) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=147 seg0=55 -> 55:179(15)+55:220(25) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=147 seg0=13..41 -> 55:179(15)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=148 seg0=27 -> 55:179(15)+55:220(25) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=148 seg0=14 -> 55:179(20)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=149 seg0=* -> 55:179(20)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=153 seg0=51 -> 55:179(15)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=153 seg0=12..38 -> 55:179(15)+55:220(20) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=154 seg0=13 -> 55:179(20)+55:220(30) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=184 seg0=1 -> 55:179(50)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=184 seg0=36 -> 55:179(50)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=184 seg0=9..27 -> 55:179(45)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=185,191,196,197 seg0=* -> 55:179(50)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=190 seg0=1..9 -> 55:179(55)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=190 seg0=36 -> 55:179(55)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+rule mon=101 d=0 f=0,4 node=190 seg0=18..27 -> 55:179(50)+55:220(10) label="二足甩尾后远程 必出单火球或三火球" label_en="Bi After TailSwing Far -> 1FB/3FB" prev=55:175
+# [#20 P3 Bi Far Cone/ChainCone/TripleCharge] sel=[p3=bi dist>=900 has=l2_vertical_escape_dust_explosion_start_chain] do=l2_special_wide_range_fire_shoot(40)+l2_vertical_escape_dust_explosion_start_chain(25)+l2_high_power_three_breath_multi_start(35) | 12 d=0 pts -> 55:193(40)+55:282(25)+55:220(35)
+rule mon=101 d=0 f=0,4 node=93,94,95 seg0=1..13 -> 55:193(40)+55:282(25)+55:220(35) label="P3 二足远程 扇火/连段扇火/三连蓄力火" label_en="P3 Bi Far Cone/ChainCone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=99,100,101 seg0=1..12 -> 55:193(40)+55:282(25)+55:220(35) label="P3 二足远程 扇火/连段扇火/三连蓄力火" label_en="P3 Bi Far Cone/ChainCone/TripleCharge"
+# [#21 P3 Bi Far Side/Ultra Allow Cone/TripleCharge] sel=[p3=bi dist>=900] fallback(43/55) allow=allow(l2_special_wide_range_fire_shoot,l2_high_power_three_breath_multi_start) | 43 d=0 pts acted=55/55 -> 55:220(15)+55:193(15),55:220(20)+55:193(15),55:220,55:220(25)+55:193(15),55:220(20)+55:193(10),55:220(30)+55:193(10),55:220(30)+55:193(15),55:220(35)+55:193(15),55:220(35)+55:193(10),55:220(10)+55:193(20),55:220(10)+55:193(10)
+rule mon=101 d=0 f=0,4 node=93 seg0=26..39 -> 55:220(15)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=93 seg0=52 -> 55:220(20)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=94,95 seg0=25 -> 55:220(20)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=96,150,198 seg0=* -> 55:220 label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=99 seg0=24..36 -> 55:220(15)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=99 seg0=48 -> 55:220(20)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=100,101 seg0=23 -> 55:220(20)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=147,148 seg0=1 -> 55:220(25)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=147 seg0=55 -> 55:220(25)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=147 seg0=13..41 -> 55:220(20)+55:193(10) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=148 seg0=27 -> 55:220(25)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=148,149 seg0=14 -> 55:220(30)+55:193(10) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=149,153,154 seg0=1 -> 55:220(30)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=149 seg0=27 -> 55:220(30)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=153 seg0=51 -> 55:220(30)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=153 seg0=12..38 -> 55:220(20)+55:193(10) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=154 seg0=25 -> 55:220(30)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=154 seg0=13 -> 55:220(30)+55:193(10) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=155 seg0=1 -> 55:220(35)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=155 seg0=25 -> 55:220(35)+55:193(15) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=155 seg0=13 -> 55:220(35)+55:193(10) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=196 seg0=1 -> 55:220(10)+55:193(20) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=196 seg0=36 -> 55:220(10)+55:193(20) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=196 seg0=9..27 -> 55:220(10)+55:193(10) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+rule mon=101 d=0 f=0,4 node=197 seg0=* -> 55:220(10)+55:193(20) label="P3 二足远程侧面/超远 扇火/三连蓄力火" label_en="P3 Bi Far Side/Ultra Allow Cone/TripleCharge"
+# [#22 P3 Bi Close Ban Press/Pin/Claw] sel=[p3=bi dist<=1000] ban=ban(l2_switch_l4_body_press,l2_new_catch_attack_start,l2_near_scratch) | 50 d=0 pts acted=50/50 -> 55:298(5)+55:299(55)+55:185(15)+55:186(5)+55:274(10),55:298(5)+55:299(40)+55:185(5)+55:186(5)+55:188(5)+55:274(5)+55:275(25),55:298(5)+55:299(40)+55:185(20)+55:186(5)+55:175(15)+55:274(5),55:298(5)+55:299(35)+55:185(5)+55:186(5)+55:188(5)+55:175(5)+55:274(5)+55:275(25),55:298(5)+55:185(55)+55:186(5)+55:274(25),55:298(5)+55:185(20)+55:186(5)+55:188(15)+55:274(10)+55:275(35),55:298(5)+55:185(40)+55:186(5)+55:175(25)+55:274(15),55:298(5)+55:185(20)+55:186(5)+55:188(15)+55:175(10)+55:274(5)+55:275(30),55:298(5)+55:299(35)+55:185(20)+55:186(5)+55:274(5),55:298(5)+55:299(25)+55:185(5)+55:186(5)+55:188(5)+55:274(5)+55:275(20),55:298(5)+55:299(20)+55:185(20)+55:186(5)+55:175(15)+55:274(10),55:298(5)+55:299(25)+55:185(5)+55:186(5)+55:188(5)+55:175(5)+55:275(25),55:298(5)+55:185(40)+55:186(5)+55:274(15),55:298(5)+55:185(10)+55:186(5)+55:188(10)+55:274(5)+55:275(30),55:298(5)+55:185(20)+55:186(5)+55:175(25)+55:274(10),55:298(5)+55:185(10)+55:186(5)+55:188(10)+55:175(5)+55:275(30),55:173(5)+55:286(10)+55:185(55)+55:186(5)+55:274(15),55:173(5)+55:286(10)+55:185(35)+55:186(5)+55:188(5)+55:274(5)+55:275(25),55:173(5)+55:286(10)+55:185(55)+55:186(5)+55:175(10)+55:274(5),55:173(5)+55:286(5)+55:185(35)+55:186(5)+55:188(5)+55:175(5)+55:274(5)+55:275(25)
+rule mon=101 d=0 f=0,4 node=91,92 seg0=1 -> 55:298(5)+55:299(55)+55:185(15)+55:186(5)+55:274(10) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=91,92 seg0=12..25 -> 55:298(5)+55:299(40)+55:185(5)+55:186(5)+55:188(5)+55:274(5)+55:275(25) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=91,92 seg0=38 -> 55:298(5)+55:299(40)+55:185(20)+55:186(5)+55:175(15)+55:274(5) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=91,92 seg0=50 -> 55:298(5)+55:299(35)+55:185(5)+55:186(5)+55:188(5)+55:175(5)+55:274(5)+55:275(25) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=97,98 seg0=1 -> 55:298(5)+55:185(55)+55:186(5)+55:274(25) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=97,98 seg0=11..23 -> 55:298(5)+55:185(20)+55:186(5)+55:188(15)+55:274(10)+55:275(35) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=97,98 seg0=35 -> 55:298(5)+55:185(40)+55:186(5)+55:175(25)+55:274(15) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=97,98 seg0=46 -> 55:298(5)+55:185(20)+55:186(5)+55:188(15)+55:175(10)+55:274(5)+55:275(30) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=145,146 seg0=1 -> 55:298(5)+55:299(35)+55:185(20)+55:186(5)+55:274(5) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=145,146 seg0=13..27 -> 55:298(5)+55:299(25)+55:185(5)+55:186(5)+55:188(5)+55:274(5)+55:275(20) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=145,146 seg0=41 -> 55:298(5)+55:299(20)+55:185(20)+55:186(5)+55:175(15)+55:274(10) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=145,146 seg0=54 -> 55:298(5)+55:299(25)+55:185(5)+55:186(5)+55:188(5)+55:175(5)+55:275(25) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=151,152 seg0=1 -> 55:298(5)+55:185(40)+55:186(5)+55:274(15) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=151,152 seg0=12..25 -> 55:298(5)+55:185(10)+55:186(5)+55:188(10)+55:274(5)+55:275(30) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=151,152 seg0=38 -> 55:298(5)+55:185(20)+55:186(5)+55:175(25)+55:274(10) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=151,152 seg0=50 -> 55:298(5)+55:185(10)+55:186(5)+55:188(10)+55:175(5)+55:275(30) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=194,195 seg0=1 -> 55:173(5)+55:286(10)+55:185(55)+55:186(5)+55:274(15) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=194,195 seg0=11..23 -> 55:173(5)+55:286(10)+55:185(35)+55:186(5)+55:188(5)+55:274(5)+55:275(25) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=194,195 seg0=35 -> 55:173(5)+55:286(10)+55:185(55)+55:186(5)+55:175(10)+55:274(5) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+rule mon=101 d=0 f=0,4 node=194,195 seg0=46 -> 55:173(5)+55:286(5)+55:185(35)+55:186(5)+55:188(5)+55:175(5)+55:274(5)+55:275(25) label="P3 二足近战禁下压禁抓(保<=8候选)" label_en="P3 Bi Close Ban Press/Pin/Claw"
+# [#23 P1/P2 After SingleFB -> SnakeFire] sel=[(phase=p1|phase=p2) stance=bi has=l2_snake_fire_shoot] prev=[move=l2_breath_single] do=l2_snake_fire_shoot | 88 d=0 pts -> 55:274
+rule mon=101 d=0 f=0,4 node=75,76,77,78,81,82,86,87 seg0=* -> 55:274 label="P1/P2 上招单火球 必出S火" label_en="P1/P2 After SingleFB -> SnakeFire" prev=55:179
+rule mon=101 d=0 f=0,4 node=129,130,135,136,140,141,182,183 seg0=* -> 55:274 label="P1/P2 上招单火球 必出S火" label_en="P1/P2 After SingleFB -> SnakeFire" prev=55:179
+rule mon=101 d=0 f=0,4 node=188,189 seg0=* -> 55:274 label="P1/P2 上招单火球 必出S火" label_en="P1/P2 After SingleFB -> SnakeFire" prev=55:179
+# [#24 P1/P2 After QuickBreath Far -> Cone] sel=[(phase=p1|phase=p2) stance=bi has=l2_special_wide_range_fire_shoot] prev=[move=l2_quick_breath] do=l2_special_wide_range_fire_shoot | 64 d=0 pts -> 55:193
+rule mon=101 d=0 f=0,4 node=77,78,83,84,88,89,131,132 seg0=* -> 55:193 label="P1/P2 单口火后远程 必出扇火" label_en="P1/P2 After QuickBreath Far -> Cone" prev=55:286,55:299
+rule mon=101 d=0 f=0,4 node=137,138,142,143,184,185,190,191 seg0=* -> 55:193 label="P1/P2 单口火后远程 必出扇火" label_en="P1/P2 After QuickBreath Far -> Cone" prev=55:286,55:299
+# [#25 P1/P2 Bi Far FB Cone30/Chain30/3FB20/1FB20] sel=[(phase=p1|phase=p2) stance=bi dist>=900 has=l2_vertical_escape_dust_explosion_start_chain] do=l2_special_wide_range_fire_shoot(30)+l2_vertical_escape_dust_explosion_start_chain(30)+l2_high_power_three_breath_multi_start(20)+l2_breath_single(20) | 12 d=0 pts -> 55:193(30)+55:282(30)+55:220(20)+55:179(20)
+rule mon=101 d=0 f=0,4 node=77,78,83,84 seg0=1..13 -> 55:193(30)+55:282(30)+55:220(20)+55:179(20) label="P1/P2 二足正背远程 扇30连30三20单20" label_en="P1/P2 Bi Far FB Cone30/Chain30/3FB20/1FB20"
+rule mon=101 d=0 f=0,4 node=88,89 seg0=1..12 -> 55:193(30)+55:282(30)+55:220(20)+55:179(20) label="P1/P2 二足正背远程 扇30连30三20单20" label_en="P1/P2 Bi Far FB Cone30/Chain30/3FB20/1FB20"
+# [#26 P1/P2 Bi Far Side HighCone LowCarpet] sel=[(phase=p1|phase=p2) stance=bi dist>=900 has=l2_special_wide_range_fire_shoot&has=l2_far_dust_explosion_start] fallback(32/32) do=l2_special_wide_range_fire_shoot(55)+l2_high_power_three_breath_multi_start(20)+l2_breath_single(15)+l2_far_dust_explosion_start(10) | 32 d=0 pts -> 55:193(55)+55:220(20)+55:179(15)+55:188(10)
+rule mon=101 d=0 f=0,4 node=77,83 seg0=26+ -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=78,84,132,138 seg0=25 -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=88 seg0=24+ -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=89,143 seg0=23 -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=131,137 seg0=25+ -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=142 seg0=23+ -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=184,190 seg0=18+ -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=185 seg0=17 -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+rule mon=101 d=0 f=0,4 node=191 seg0=19 -> 55:193(55)+55:220(20)+55:179(15)+55:188(10) label="P1/P2 二足侧面远程 高扇火低侧地毯" label_en="P1/P2 Bi Far Side HighCone LowCarpet"
+# [#27 P1/P2 Bi Far Other Cone60/3FB20/1FB20] sel=[(phase=p1|phase=p2) stance=bi dist>=900 has=l2_special_wide_range_fire_shoot] fallback(20/64) do=l2_special_wide_range_fire_shoot(60)+l2_high_power_three_breath_multi_start(20)+l2_breath_single(20) | 20 d=0 pts -> 55:193(60)+55:220(20)+55:179(20)
+rule mon=101 d=0 f=0,4 node=131,137,143 seg0=1..12 -> 55:193(60)+55:220(20)+55:179(20) label="P1/P2 二足其余远程 扇60三20单20" label_en="P1/P2 Bi Far Other Cone60/3FB20/1FB20"
+rule mon=101 d=0 f=0,4 node=132,138 seg0=1..13 -> 55:193(60)+55:220(20)+55:179(20) label="P1/P2 二足其余远程 扇60三20单20" label_en="P1/P2 Bi Far Other Cone60/3FB20/1FB20"
+rule mon=101 d=0 f=0,4 node=142 seg0=1..11 -> 55:193(60)+55:220(20)+55:179(20) label="P1/P2 二足其余远程 扇60三20单20" label_en="P1/P2 Bi Far Other Cone60/3FB20/1FB20"
+rule mon=101 d=0 f=0,4 node=184,185,190 seg0=1..9 -> 55:193(60)+55:220(20)+55:179(20) label="P1/P2 二足其余远程 扇60三20单20" label_en="P1/P2 Bi Far Other Cone60/3FB20/1FB20"
+rule mon=101 d=0 f=0,4 node=191 seg0=1..10 -> 55:193(60)+55:220(20)+55:179(20) label="P1/P2 二足其余远程 扇60三20单20" label_en="P1/P2 Bi Far Other Cone60/3FB20/1FB20"
+# [#28 P2 Bi Close Pre-QB Side] sel=[(phase=p1|phase=p2) stance=bi dist<=1000 has=l2_quick_breath&has=l2_far_dust_explosion_start] do=l2_quick_breath(38)+l2_near_scratch(18)+l2_near_side_scratch(15)+l2_line_fire_shoot(12)+l2_snake_fire_shoot(9)+l2_far_dust_explosion_start(6)+l2_under_breath(2) | 18 d=0 pts -> 55:299(38)+55:172(18)+55:298(15)+55:185(12)+55:274(9)+55:188(6)+55:186(2),55:286(38)+55:172(18)+55:173(15)+55:185(12)+55:274(9)+55:188(6)+55:186(2)
+rule mon=101 d=0 f=0,4 node=81,82,135,136 seg0=12..24 -> 55:299(38)+55:172(18)+55:298(15)+55:185(12)+55:274(9)+55:188(6)+55:186(2) label="P2 二足近战(未单口火) 侧面含低侧地毯" label_en="P2 Bi Close Pre-QB Side"
+rule mon=101 d=0 f=0,4 node=81,82,135,136 seg0=48 -> 55:299(38)+55:172(18)+55:298(15)+55:185(12)+55:274(9)+55:188(6)+55:186(2) label="P2 二足近战(未单口火) 侧面含低侧地毯" label_en="P2 Bi Close Pre-QB Side"
+rule mon=101 d=0 f=0,4 node=188,189 seg0=11..22 -> 55:286(38)+55:172(18)+55:173(15)+55:185(12)+55:274(9)+55:188(6)+55:186(2) label="P2 二足近战(未单口火) 侧面含低侧地毯" label_en="P2 Bi Close Pre-QB Side"
+rule mon=101 d=0 f=0,4 node=188,189 seg0=44 -> 55:286(38)+55:172(18)+55:173(15)+55:185(12)+55:274(9)+55:188(6)+55:186(2) label="P2 二足近战(未单口火) 侧面含低侧地毯" label_en="P2 Bi Close Pre-QB Side"
+# [#29 P2 Bi Close Pre-QB Back] sel=[(phase=p1|phase=p2) stance=bi dist<=1000 has=l2_quick_breath&has=l2_tail_swing] fallback(6/12) do=l2_quick_breath(35)+l2_near_scratch(18)+l2_near_side_scratch(15)+l2_line_fire_shoot(12)+l2_tail_swing(10)+l2_snake_fire_shoot(8)+l2_under_breath(2) | 6 d=0 pts -> 55:299(35)+55:172(18)+55:298(15)+55:185(12)+55:175(10)+55:274(8)+55:186(2),55:286(35)+55:172(18)+55:173(15)+55:185(12)+55:175(10)+55:274(8)+55:186(2)
+rule mon=101 d=0 f=0,4 node=81,82,135,136 seg0=36 -> 55:299(35)+55:172(18)+55:298(15)+55:185(12)+55:175(10)+55:274(8)+55:186(2) label="P2 二足近战(未单口火) 背面含甩尾" label_en="P2 Bi Close Pre-QB Back"
+rule mon=101 d=0 f=0,4 node=188,189 seg0=33 -> 55:286(35)+55:172(18)+55:173(15)+55:185(12)+55:175(10)+55:274(8)+55:186(2) label="P2 二足近战(未单口火) 背面含甩尾" label_en="P2 Bi Close Pre-QB Back"
+# [#30 P2 Bi Close Pre-QB Front] sel=[(phase=p1|phase=p2) stance=bi dist<=1000 has=l2_quick_breath] fallback(6/30) do=l2_quick_breath(40)+l2_near_scratch(20)+l2_near_side_scratch(15)+l2_line_fire_shoot(13)+l2_snake_fire_shoot(10)+l2_under_breath(2) | 6 d=0 pts -> 55:299(40)+55:172(20)+55:298(15)+55:185(13)+55:274(10)+55:186(2),55:286(40)+55:172(20)+55:173(15)+55:185(13)+55:274(10)+55:186(2)
+rule mon=101 d=0 f=0,4 node=81,82,135,136 seg0=1 -> 55:299(40)+55:172(20)+55:298(15)+55:185(13)+55:274(10)+55:186(2) label="P2 二足近战(未单口火) 正面" label_en="P2 Bi Close Pre-QB Front"
+rule mon=101 d=0 f=0,4 node=188,189 seg0=1 -> 55:286(40)+55:172(20)+55:173(15)+55:185(13)+55:274(10)+55:186(2) label="P2 二足近战(未单口火) 正面" label_en="P2 Bi Close Pre-QB Front"
+# [#31 P1/P2 Bi Close Normal Side LowCone] sel=[(phase=p1|phase=p2) stance=bi dist<=1000 has=l2_under_breath&has=l2_far_dust_explosion_start] fallback(30/48) do=l2_near_scratch(26)+l2_near_side_scratch(22)+l2_line_fire_shoot(20)+l2_snake_fire_shoot(20)+l2_far_dust_explosion_start(10)+l2_under_breath(2) | 30 d=0 pts -> 55:172(26)+55:298(22)+55:185(20)+55:274(20)+55:188(10)+55:297(2),55:172(26)+55:298(22)+55:185(20)+55:274(20)+55:188(10)+55:186(2),55:172(26)+55:173(22)+55:185(20)+55:274(20)+55:188(10)+55:186(2)
+rule mon=101 d=0 f=0,4 node=75,76,129,130 seg0=12..24 -> 55:172(26)+55:298(22)+55:185(20)+55:274(20)+55:188(10)+55:297(2) label="P1/P2 二足近战(常态) 侧面低孕吐" label_en="P1/P2 Bi Close Normal Side LowCone"
+rule mon=101 d=0 f=0,4 node=75,76,129,130 seg0=48 -> 55:172(26)+55:298(22)+55:185(20)+55:274(20)+55:188(10)+55:297(2) label="P1/P2 二足近战(常态) 侧面低孕吐" label_en="P1/P2 Bi Close Normal Side LowCone"
+rule mon=101 d=0 f=0,4 node=86,87,140,141 seg0=11..22 -> 55:172(26)+55:298(22)+55:185(20)+55:274(20)+55:188(10)+55:186(2) label="P1/P2 二足近战(常态) 侧面低孕吐" label_en="P1/P2 Bi Close Normal Side LowCone"
+rule mon=101 d=0 f=0,4 node=86,87,140,141 seg0=44 -> 55:172(26)+55:298(22)+55:185(20)+55:274(20)+55:188(10)+55:186(2) label="P1/P2 二足近战(常态) 侧面低孕吐" label_en="P1/P2 Bi Close Normal Side LowCone"
+rule mon=101 d=0 f=0,4 node=182,183 seg0=9..18 -> 55:172(26)+55:173(22)+55:185(20)+55:274(20)+55:188(10)+55:186(2) label="P1/P2 二足近战(常态) 侧面低孕吐" label_en="P1/P2 Bi Close Normal Side LowCone"
+rule mon=101 d=0 f=0,4 node=182,183 seg0=36 -> 55:172(26)+55:173(22)+55:185(20)+55:274(20)+55:188(10)+55:186(2) label="P1/P2 二足近战(常态) 侧面低孕吐" label_en="P1/P2 Bi Close Normal Side LowCone"
+# [#32 P1/P2 Bi Close Normal Back LowCone] sel=[(phase=p1|phase=p2) stance=bi dist<=1000 has=l2_under_breath&has=l2_tail_swing] fallback(10/32) do=l2_near_scratch(24)+l2_near_side_scratch(20)+l2_line_fire_shoot(20)+l2_tail_swing(20)+l2_snake_fire_shoot(14)+l2_under_breath(2) | 10 d=0 pts -> 55:172(24)+55:298(20)+55:185(20)+55:175(20)+55:274(14)+55:297(2),55:172(24)+55:298(20)+55:185(20)+55:175(20)+55:274(14)+55:186(2),55:172(24)+55:173(20)+55:185(20)+55:175(20)+55:274(14)+55:186(2)
+rule mon=101 d=0 f=0,4 node=75,76,129,130 seg0=36 -> 55:172(24)+55:298(20)+55:185(20)+55:175(20)+55:274(14)+55:297(2) label="P1/P2 二足近战(常态) 背面低孕吐" label_en="P1/P2 Bi Close Normal Back LowCone"
+rule mon=101 d=0 f=0,4 node=86,87,140,141 seg0=33 -> 55:172(24)+55:298(20)+55:185(20)+55:175(20)+55:274(14)+55:186(2) label="P1/P2 二足近战(常态) 背面低孕吐" label_en="P1/P2 Bi Close Normal Back LowCone"
+rule mon=101 d=0 f=0,4 node=182,183 seg0=27 -> 55:172(24)+55:173(20)+55:185(20)+55:175(20)+55:274(14)+55:186(2) label="P1/P2 二足近战(常态) 背面低孕吐" label_en="P1/P2 Bi Close Normal Back LowCone"
+# [#33 P1/P2 Bi Close Normal Front LowCone] sel=[(phase=p1|phase=p2) stance=bi dist<=1000 has=l2_under_breath] fallback(10/80) do=l2_near_scratch(32)+l2_near_side_scratch(22)+l2_line_fire_shoot(24)+l2_snake_fire_shoot(20)+l2_under_breath(2) | 10 d=0 pts -> 55:172(32)+55:298(22)+55:185(24)+55:274(20)+55:297(2),55:172(32)+55:298(22)+55:185(24)+55:274(20)+55:186(2),55:172(32)+55:173(22)+55:185(24)+55:274(20)+55:186(2)
+rule mon=101 d=0 f=0,4 node=75,76,129,130 seg0=1 -> 55:172(32)+55:298(22)+55:185(24)+55:274(20)+55:297(2) label="P1/P2 二足近战(常态) 正面低孕吐" label_en="P1/P2 Bi Close Normal Front LowCone"
+rule mon=101 d=0 f=0,4 node=86,87,140,141 seg0=1 -> 55:172(32)+55:298(22)+55:185(24)+55:274(20)+55:186(2) label="P1/P2 二足近战(常态) 正面低孕吐" label_en="P1/P2 Bi Close Normal Front LowCone"
+rule mon=101 d=0 f=0,4 node=182,183 seg0=1 -> 55:172(32)+55:173(22)+55:185(24)+55:274(20)+55:186(2) label="P1/P2 二足近战(常态) 正面低孕吐" label_en="P1/P2 Bi Close Normal Front LowCone"
+# [#34 P1/P2 Bi Other Fallback Ban Rush/Press] sel=[(phase=p1|phase=p2) stance=bi] fallback(4/97) ban=ban(rush,l2_switch_l4_body_press) | 4 d=0 pts acted=97/160,noop=63 -> 55:179(35)+55:220(30)
+rule mon=101 d=0 f=0,4 node=79,85,186,192 seg0=* -> 55:179(35)+55:220(30) label="P1/P2 二足其余点位禁车禁下压" label_en="P1/P2 Bi Other Fallback Ban Rush/Press"
+# [#35 Bi Occluded Ban Rush] sel=[context=occluded stance=bi] ban=ban(rush) | 9 d=0 pts acted=9/9 -> 55:179(30)+55:220(10)+55:184(10)+55:270(20),55:179(30)+55:220(10)+55:188(10)+55:270(20),55:179(30)+55:220(10)+55:184(15),55:179(30)+55:220(10)+55:188(15)
+rule mon=101 d=0 f=0,4 node=46 seg0=3..11 -> 55:179(30)+55:220(10)+55:184(10)+55:270(20) label="二足遮挡禁车" label_en="Bi Occluded Ban Rush"
+rule mon=101 d=0 f=0,4 node=46 seg0=19 -> 55:179(30)+55:220(10)+55:188(10)+55:270(20) label="二足遮挡禁车" label_en="Bi Occluded Ban Rush"
+rule mon=101 d=0 f=0,4 node=46 seg0=29..36 -> 55:179(30)+55:220(10)+55:184(15) label="二足遮挡禁车" label_en="Bi Occluded Ban Rush"
+rule mon=101 d=0 f=0,4 node=46 seg0=53..60 -> 55:179(30)+55:220(10)+55:184(15) label="二足遮挡禁车" label_en="Bi Occluded Ban Rush"
+rule mon=101 d=0 f=0,4 node=46 seg0=43 -> 55:179(30)+55:220(10)+55:188(15) label="二足遮挡禁车" label_en="Bi Occluded Ban Rush"
+rule mon=101 d=0 f=0,4 node=46 seg0=67 -> 55:179(30)+55:220(10)+55:188(15) label="二足遮挡禁车" label_en="Bi Occluded Ban Rush"
+# [#36 Dragonator Wall Ban Rush] sel=[em_104=1] ban=ban(rush) | 2 d=0 pts acted=2/5,noop=3 -> 55:278(20)+55:279(20)+55:280(25),55:234
+rule mon=101 d=0 f=0,4 node=62 seg0=7 -> 55:278(20)+55:279(20)+55:280(25) label="击龙枪高台墙面禁车" label_en="Dragonator Wall Ban Rush"
+rule mon=101 d=0 f=0,4 node=63 seg0=* -> 55:234 label="击龙枪高台墙面禁车" label_en="Dragonator Wall Ban Rush"
+# [#37 em_110 Fallback Ban Rush (Keep Solo)] sel=[em_110=2] fallback(7/7) ban=ban(rush) | 7 d=0 pts acted=7/16,noop=5 -> 55:185,55:179,55:192,55:180,55:220(30)+55:184(40)+55:193(15),55:177(45)+55:178(40),55:221(45)+55:189(40)
+rule mon=101 d=0 f=0,4 node=21 seg0=29 -> 55:185 label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"
+rule mon=101 d=0 f=0,4 node=21 seg0=34 -> 55:179 label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"
+rule mon=101 d=0 f=0,4 node=21 seg0=55 -> 55:192 label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"
+rule mon=101 d=0 f=0,4 node=21 seg0=60 -> 55:180 label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"
+rule mon=101 d=0 f=0,4 node=21 seg0=93 -> 55:220(30)+55:184(40)+55:193(15) label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"
+rule mon=101 d=0 f=0,4 node=21 seg0=102 -> 55:177(45)+55:178(40) label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"
+rule mon=101 d=0 f=0,4 node=21 seg0=108 -> 55:221(45)+55:189(40) label="em_110=2 可替代点禁车(保留4强制单车点)" label_en="em_110 Fallback Ban Rush (Keep Solo)"

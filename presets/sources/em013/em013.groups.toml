@@ -1,0 +1,158 @@
+# ============================================================================
+# User-Editable Semantic Overlay: em013 (Fatalis / 黑龙, MonsterID = 101)
+# Standard TOML 1.0 — paired with read-only `em013.thkmeta.toml`.
+# Regenerating `.thkmeta.toml` never touches this file.
+# ============================================================================
+
+[conditions]
+# Friendly aliases for monster-private opcodes (`em_*`) and THK registers (`var_*`).
+posture           = "em_101"  # 0 = bipedal, 1 = quadruped ([uEm013+0x20928])
+stage             = "em_103"  # 0 = P1, 1 = P2, !=0&!=1 = P3 ([uEm013+0x20964])
+target_pl_flag    = "em_104"  # player flag bit 0x20000 ([cPlPlayer+0x8964])
+blue_flame        = "em_106"  # 1 = skull-break failed / blue flame ([uEm013+0x20960])
+story_npc         = "em_108"  # Quest 51612 Aiden/story NPC state
+quest_51612_phase = "em_109"  # Quest 51612 story event helper check
+binder_or_part    = "em_10a"  # Monster state bit check ([uEm013+0x1c320])
+action_state_10b  = "em_10b"  # Action IDs 0xb3/0xe7/0xe8/0xe9/5 check
+em_cond_10c       = "em_10c"  # uEm013 private check FUN_1404ad930
+occluded          = "em_10d"  # LoS / occluded gate FUN_1404a62f0
+em_cond_113       = "em_113"  # Multi-target/HP scaled check FUN_141347e90
+bi_switch_timer   = "var_0"   # Bipedal state timer (op_80/op_94)
+quad_switch_timer = "var_1"   # Quadruped state timer (op_81/op_95)
+extra_charge_cd   = "var_5"   # Extra-charge cooldown (op_85/op_99)
+quad_no_bite_flag = "var_10"  # n128/n11 flag register (op_8a/op_9e)
+quad_charged      = "var_11"  # Quadruped post-rush flag (op_8b/op_9f)
+
+[groups.phase]
+p1 = "em_103=0"
+p2 = "em_103=1"
+p3 = "em_103!=0 & em_103!=1"
+
+[groups.flame]
+normal = "!em_106=1"
+blue   = "em_106=1"
+
+[groups.stance]
+bi   = "em_101=0"
+quad = "em_101=1 | (flying=false & em_101!=0)"
+fly  = "flying"
+
+# Compound phase + stance shorthands
+[groups.p1]
+bi   = "phase=p1 & stance=bi"
+quad = "phase=p1 & stance=quad"
+
+[groups.p2]
+bi   = "phase=p2 & stance=bi"
+quad = "phase=p2 & stance=quad"
+
+[groups.p3]
+bi   = "phase=p3 & stance=bi"
+quad = "phase=p3 & stance=quad"
+
+[groups.context]
+main         = "parent=11 & !node=18,19,21"
+knock        = "via=127 & target_state=5"
+low_hp       = "via=127 & !target_state=5"
+occluded     = "via=45 & em_10d"
+stance_check = "via=13"
+extra_charge = "node=18"
+
+[groups.quest]
+special_assignment = "quest_id=51612"
+other              = "quest_id!=51612"
+
+[groups.charged]
+no  = "var_11 < 1"
+yes = "var_11 >= 1"
+
+# Named distance ranges (statically matched against THK intervals)
+[groups.range]
+bi_close     = "dist <= 900"
+bi_close_knk = "dist <= 1000"
+bi_mid       = "dist in 900..2000"
+bi_long      = "dist in 2000..4500"
+bi_ultra     = "dist >= 4500"
+quad_close   = "dist <= 500"
+quad_mid     = "dist in 500..1500"
+quad_long    = "dist in 1500..5000"
+quad_ultra   = "dist >= 5000"
+
+# Named angle sectors (circular 360-deg subset inclusion)
+[groups.dir]
+front      = "angle in -45..45"
+back       = "angle in 135..225"
+side       = "angle in 45..135 | 225..315"
+front_hemi = "angle in -90..90"
+back_hemi  = "angle in 90..270"
+
+[moves]
+# Complete 60-move auto-generated snake_case roster (ZERO node IDs — editable by user).
+# Rename left-hand keys freely, or use these canonical snake_case names directly in `.preset.toml`.
+# Co-occurring variants are structurally distinguished (chain / internal dist threshold);
+# multi-node moves in disjoint contexts automatically narrow via conditions.
+fly_breath_multi_start_01                              = "fly_breath_multi_start_01"                               # FlyBreathMultiStart01 (1 node)
+fly_breath_single                                      = "fly_breath_single"                                       # FlyBreathSingle (1 node)
+fly_switch_l2_assault_start                            = "fly_switch_l2_assault_start"                             # FlySwitchL2AssaultStart (2 nodes)
+fly_turn                                               = "fly_turn"                                                # FlyTurn (1 node)
+fly_under_breath                                       = "fly_under_breath"                                        # FlyUnderBreath (1 node)
+fly_vertical_breath                                    = "fly_vertical_breath"                                     # FlyVerticalBreath (1 node)
+fly_zigzag_breath                                      = "fly_zigzag_breath"                                       # FlyZigzagBreath (1 node)
+glide_combat_dist1000                                  = "glide_combat_dist1000"                                   # GlideCombat (dist<1000)
+glide_combat_dist4000                                  = "glide_combat_dist4000"                                   # GlideCombat (dist<4000)
+l2_back_jump_breath_start                              = "l2_back_jump_breath_start"                               # L2BackJumpBreathStart (1 node)
+l2_breath_multi_start_01                               = "l2_breath_multi_start_01"                                # L2BreathMultiStart01 (1 node)
+l2_breath_multi_start_02                               = "l2_breath_multi_start_02"                                # L2BreathMultiStart02 (1 node)
+l2_breath_single                                       = "l2_breath_single"                                        # L2BreathSingle (1 node)
+l2_far_dust_explosion_start                            = "l2_far_dust_explosion_start"                             # L2FarDustExplosionStart (1 node)
+l2_final_mode_stage_breath_start                       = "l2_final_mode_stage_breath_start"                        # L2FinalModeStageBreathStart (1 node)
+l2_high_ground_bite_1                                  = "l2_high_ground_bite_1"                                   # L2HighGroundBite1 (1 node)
+l2_high_ground_breath                                  = "l2_high_ground_breath"                                   # L2HighGroundBreath (1 node)
+l2_high_ground_breath_for_dragon_lance_wall            = "l2_high_ground_breath_for_dragon_lance_wall"             # L2HighGroundBreathForDragonLanceWall (1 node)
+l2_high_ground_single_bite                             = "l2_high_ground_single_bite"                              # L2HighGroundSingleBite (1 node)
+l2_high_ground_wide_breath                             = "l2_high_ground_wide_breath"                              # L2HighGroundWideBreath (1 node)
+l2_high_ground_wide_breath_for_dragon_lance_wall       = "l2_high_ground_wide_breath_for_dragon_lance_wall"        # L2HighGroundWideBreathForDragonLanceWall (1 node)
+l2_high_ground_zero_range_breath                       = "l2_high_ground_zero_range_breath"                        # L2HighGroundZeroRangeBreath (1 node)
+l2_high_ground_zero_range_breath_for_dragon_lance_wall = "l2_high_ground_zero_range_breath_for_dragon_lance_wall"  # L2HighGroundZeroRangeBreathForDragonLanceWall (1 node)
+l2_high_power_three_breath_multi_start                 = "l2_high_power_three_breath_multi_start"                  # L2HighPowerThreeBreathMultiStart (1 node)
+l2_landing                                             = "l2_landing"                                              # L2Landing (2 nodes)
+l2_line_fire_shoot                                     = "l2_line_fire_shoot"                                      # L2LineFireShoot (1 node)
+l2_multi_swing_dust_explosion                          = "l2_multi_swing_dust_explosion"                           # L2MultiSwingDustExplosion (1 node)
+l2_near_scratch                                        = "l2_near_scratch"                                         # L2NearScratch (1 node)
+l2_near_side_scratch                                   = "l2_near_side_scratch"                                    # L2NearSideScratch (2 nodes; chain->L2SpecialWideRangeFireShoot)
+l2_new_catch_attack_start                              = "l2_new_catch_attack_start"                               # L2NewCatchAttackStart (1 node)
+l2_quick_breath                                        = "l2_quick_breath"                                         # L2QuickBreath (2 nodes; chain->L2SpecialWideRangeFireShoot)
+l2_rush_start                                          = "l2_rush_start"                                           # L2RushStart (2 nodes)
+l2_search                                              = "l2_search"                                               # L2Search (1 node)
+l2_snake_fire_shoot                                    = "l2_snake_fire_shoot"                                     # L2SnakeFireShoot (1 node)
+l2_special_wide_range_fire_shoot                       = "l2_special_wide_range_fire_shoot"                        # L2SpecialWideRangeFireShoot (1 node; d=1 chain)
+l2_stage_breath_start                                  = "l2_stage_breath_start"                                   # L2StageBreathStart (1 node)
+l2_stage_breath_start_02                               = "l2_stage_breath_start_02"                                # L2StageBreathStart02 (1 node)
+l2_switch_l4                                           = "l2_switch_l4"                                            # L2SwitchL4 (1 node)
+l2_switch_l4_body_press                                = "l2_switch_l4_body_press"                                 # L2SwitchL4BodyPress (1 node)
+l2_tail_swing                                          = "l2_tail_swing"                                           # L2TailSwing (1 node)
+l2_turn                                                = "l2_turn"                                                 # L2Turn (1 node)
+l2_under_breath                                        = "l2_under_breath"                                         # L2UnderBreath (2 nodes; narrowed by conditions)
+l2_vertical_escape_dust_explosion_start                = "l2_vertical_escape_dust_explosion_start"                 # L2VerticalEscapeDustExplosionStart (1 node; no chain)
+l2_vertical_escape_dust_explosion_start_chain          = "l2_vertical_escape_dust_explosion_start_chain"           # L2VerticalEscapeDustExplosionStart -> L2SpecialWideRangeFireShoot chain (1 node)
+l2_walk                                                = "l2_walk"                                                 # L2Walk (4 nodes)
+l4_all_angle_breath_l                                  = "l4_all_angle_breath_l"                                   # L4AllAngleBreathL (1 node)
+l4_breath_multi_start_01                               = "l4_breath_multi_start_01"                                # L4BreathMultiStart01 (2 nodes; narrowed by conditions)
+l4_breath_multi_start_02                               = "l4_breath_multi_start_02"                                # L4BreathMultiStart02 (1 node)
+l4_breath_single                                       = "l4_breath_single"                                        # L4BreathSingle (1 node)
+l4_far_dust_explosion_start                            = "l4_far_dust_explosion_start"                             # L4FarDustExplosionStart (1 node)
+l4_front_swing_breath                                  = "l4_front_swing_breath"                                   # L4FrontSwingBreath (1 node)
+l4_near_fire_bite                                      = "l4_near_fire_bite"                                       # L4NearFireBite (1 node)
+l4_quick_breath                                        = "l4_quick_breath"                                         # L4QuickBreath (1 node)
+l4_range_reset_dust_explosion_start                    = "l4_range_reset_dust_explosion_start"                     # L4RangeResetDustExplosionStart (1 node)
+l4_rush_start                                          = "l4_rush_start"                                           # L4RushStart (2 nodes; narrowed by conditions)
+l4_short_bite                                          = "l4_short_bite"                                           # L4ShortBite (1 node)
+l4_switch_l2_high_power_three_breath_multi_start       = "l4_switch_l2_high_power_three_breath_multi_start"        # L4SwitchL2HighPowerThreeBreathMultiStart (2 nodes; narrowed by conditions)
+l4_switch_l2_short                                     = "l4_switch_l2_short"                                      # L4SwitchL2Short (1 node)
+l4_tail_slam                                           = "l4_tail_slam"                                            # L4TailSlam (1 node)
+no_action_55_306                                       = "no_action_55_306"                                        # NoAction_55_306 (1 node)
+
+[move_groups]
+# True multi-move union groups only (combine 2+ distinct moves under one fallback/union name; ZERO node IDs).
+carpet = ["l2_vertical_escape_dust_explosion_start", "l2_far_dust_explosion_start"]
+rush   = ["l2_rush_start", "l4_rush_start"]

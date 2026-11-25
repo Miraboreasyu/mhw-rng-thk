@@ -1,0 +1,358 @@
+# ============================================================================
+# Declarative Semantic Preset: Fatalis Phase 1 Full Nasty (TOML v3.3, `[[rules]]`)
+# Paired with `em013.thkmeta.toml` + `em013.groups.toml`.
+# Zero raw node IDs, zero raw `d = 1` / `ENDR` / `RANDOM` / `cond = ...` in rules!
+# ============================================================================
+meta        = "em013.thkmeta.toml"
+groups      = "em013.groups.toml"
+name        = "fatalis_p1_nasty"
+desc        = "黑龙(em013)一阶段二足+四足全距离纯RNG控制预设"
+desc_en     = "Fatalis (em013) P1 full-range pure-RNG AI preset (bipedal + quadruped)"
+disable_tag = ["far_multi", "bipedal_lock"]
+
+# === Phase 1 二足 (Bipedal) ===
+# 1. Close range: `l2_under_breath` = ["55:186", "55:297"] -> P1 conditions auto-lock 55:297!
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_close" }
+do = "l2_under_breath"
+group = "bi_close_cone"
+label = "P1 2足<900 孕吐"
+label_en = "P1 Bi <900 Cone"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_close_knk" }
+do = "l2_under_breath"
+group = "bi_close_cone"
+tag = "guard"
+label = "P1 2足倒后<900 孕吐"
+label_en = "P1 Bi Knock <900 Cone"
+
+# 2. Suppress 35% cone follow-up when entered from P1 bipedal close callers
+[[rules]]
+followup = "l2_under_breath"
+from = { p1 = "bi", context = "main" }
+do = "cancel"
+group = "bi_no_cone_chain"
+label = "P1 2足孕吐不派生扇火"
+label_en = "P1 Bi No Cone Chain"
+
+[[rules]]
+followup = "l2_under_breath"
+from = { p1 = "bi", context = "knock" }
+do = "cancel"
+group = "bi_no_cone_chain"
+tag = "guard"
+label = "P1 2足倒后孕吐不派生扇火"
+label_en = "P1 Bi Knock No Cone Chain"
+
+# 3. Mid/Long range (900..2000): `dir` separates front/back; `has` locks side directly
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_mid", dir = "front" }
+do = "l2_vertical_escape_dust_explosion_start"
+group = "bi_front_carpet"
+label = "P1 2足900~2000 正面地毯火"
+label_en = "P1 Bi 900-2000 Front Carpet"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_mid", dir = "front" }
+do = "l2_vertical_escape_dust_explosion_start"
+group = "bi_front_carpet"
+tag = "guard"
+label = "P1 2足倒后900~2000 正面地毯火"
+label_en = "P1 Bi Knock 900-2000 Front Carpet"
+
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_mid", dir = "back" }
+do = "l2_tail_swing"
+group = "bi_back_tail"
+label = "P1 2足900~2000 背面甩尾"
+label_en = "P1 Bi 900-2000 Back TailWhip"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_mid", dir = "back" }
+do = "l2_tail_swing"
+group = "bi_back_tail"
+tag = "guard"
+label = "P1 2足倒后900~2000 背面甩尾"
+label_en = "P1 Bi Knock 900-2000 Back TailWhip"
+
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_mid", has = "l2_far_dust_explosion_start" }
+do = "l2_far_dust_explosion_start"
+group = "bi_side_carpet"
+label = "P1 2足900~2000 侧面地毯火"
+label_en = "P1 Bi 900-2000 Side Carpet"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_mid", has = "l2_far_dust_explosion_start" }
+do = "l2_far_dust_explosion_start"
+group = "bi_side_carpet"
+tag = "guard"
+label = "P1 2足倒后900~2000 侧面地毯火"
+label_en = "P1 Bi Knock 900-2000 Side Carpet"
+
+# 4. Extra-Long range (2000..4500): `carpet` union resolves front/back vs side per sector
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_long" }
+do = "carpet"
+group = "bi_far_carpet"
+label = "P1 2足2000~4500 地毯火"
+label_en = "P1 Bi 2000-4500 Carpet"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_long" }
+do = "carpet"
+group = "bi_far_carpet"
+tag = "guard"
+label = "P1 2足倒后2000~4500 地毯火"
+label_en = "P1 Bi Knock 2000-4500 Carpet"
+
+# 5. Ultra-Long range (>=4500): single fireball vs triple fireball
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_ultra" }
+do = "l2_breath_single"
+group = "bi_ultra_fireball"
+tag = "far_single"
+label = "P1 2足>4500 单发火球"
+label_en = "P1 Bi >4500 Single Fireball"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_ultra" }
+do = "l2_breath_single"
+group = "bi_ultra_fireball"
+tag = ["guard", "far_single"]
+label = "P1 2足倒后>4500 单发火球"
+label_en = "P1 Bi Knock >4500 Single Fireball"
+
+[[rules]]
+when = { p1 = "bi", context = "main", range = "bi_ultra" }
+do = "l2_high_power_three_breath_multi_start"
+group = "bi_ultra_fireball"
+tag = "far_multi"
+label = "P1 2足>4500 三连火球"
+label_en = "P1 Bi >4500 Triple Fireball"
+
+[[rules]]
+when = { p1 = "bi", context = "knock", range = "bi_ultra" }
+do = "l2_high_power_three_breath_multi_start"
+group = "bi_ultra_fireball"
+tag = ["guard", "far_multi"]
+label = "P1 2足倒后>4500 三连火球"
+label_en = "P1 Bi Knock >4500 Triple Fireball"
+
+# 6. Bipedal auxiliary guards & optional bipedal stance lock (`tag = "bipedal_lock"`)
+[[rules]]
+when = { context = "occluded", stance = "bi", flame = "normal" }
+do = "carpet"
+group = "bi_far_carpet"
+tag = "guard"
+label = "P1 2足遮挡补偿地毯火"
+label_en = "P1 Bi Occluded Carpet"
+
+[[rules]]
+when = { context = "extra_charge", p1 = "bi" }
+do = "cancel"
+group = "bi_stance_guard"
+tag = "guard"
+label = "P1 跳过15%额外龙车"
+label_en = "P1 Skip 15% Extra Charge"
+
+[[rules]]
+when = { context = "stance_check", p1 = "bi" }
+do = "cancel"
+group = "bi_stance_guard"
+tag = "bipedal_lock"
+label = "P1 维持二足态(全任务)"
+label_en = "P1 Hold Bipedal (All Quests)"
+
+[[rules]]
+when = { context = "stance_check", p1 = "quad" }
+do = "trigger"
+group = "bi_stance_guard"
+tag = "bipedal_lock"
+label = "P1 加快站立回二足(全任务)"
+label_en = "P1 Stand Bipedal Fast (All Quests)"
+
+# === Phase 1 四足 (Quadruped) ===
+# 1. Close range (0..500)
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_close", charged = "no" }
+do = "l4_rush_start"
+group = "quad_close_rush"
+label = "P1 4足(0~500未车) 蛇形咬"
+label_en = "P1 Quad 0-500 NoChg Snap"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_close", charged = "no" }
+do = "l4_rush_start"
+group = "quad_close_rush"
+tag = "guard"
+label = "P1 4足倒后(0~500未车) 蛇形咬"
+label_en = "P1 Quad Knock 0-500 NoChg Snap"
+
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_close", charged = "yes" }
+do = "l4_range_reset_dust_explosion_start"
+group = "quad_close_snap"
+label = "P1 4足(0~500已车) 后撤地毯火"
+label_en = "P1 Quad 0-500 Chgd Snapback"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_close", charged = "yes" }
+do = "l4_range_reset_dust_explosion_start"
+group = "quad_close_snap"
+tag = "guard"
+label = "P1 4足倒后(0~500已车) 后撤地毯火"
+label_en = "P1 Quad Knock 0-500 Chgd Snapback"
+
+# 2. Mid range (500..1500) rear sectors
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_mid", has = "l4_tail_slam" }
+do = "l4_tail_slam"
+group = "quad_tail_slam"
+label = "P1 4足后方 尾砸"
+label_en = "P1 Quad Back TailSlam"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_mid", has = "l4_tail_slam" }
+do = "l4_tail_slam"
+group = "quad_tail_slam"
+tag = "guard"
+label = "P1 4足倒后后方 尾砸"
+label_en = "P1 Quad Knock Back TailSlam"
+
+# 3. Mid range (500..1500) front sectors (`not_has = "l4_tail_slam"` kept explicitly)
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_mid", not_has = "l4_tail_slam", charged = "no" }
+do = "l4_rush_start"
+group = "quad_mid_rush"
+label = "P1 4足(500~1500正面未车) 蛇形咬"
+label_en = "P1 Quad 500-1500 Front NoChg Snap"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_mid", not_has = "l4_tail_slam", charged = "no" }
+do = "l4_rush_start"
+group = "quad_mid_rush"
+tag = "guard"
+label = "P1 4足倒后(500~1500未车) 蛇形咬"
+label_en = "P1 Quad Knock 500-1500 NoChg Snap"
+
+[[rules]]
+label = "P1 4足(500~1500正面已车) 蓄力火/后撤地毯"
+label_en = "P1 Quad 500-1500 Chgd 50/50"
+group = "quad_mid_5050"
+when = { p1 = "quad", context = "main", range = "quad_mid", not_has = "l4_tail_slam", charged = "yes" }
+[rules.do]
+l4_switch_l2_high_power_three_breath_multi_start = 50
+l4_range_reset_dust_explosion_start = 50
+
+[[rules]]
+label = "P1 4足倒后(500~1500已车) 蓄力火/后撤地毯"
+label_en = "P1 Quad Knock 500-1500 Chgd 50/50"
+group = "quad_mid_5050"
+tag = "guard"
+when = { p1 = "quad", context = "knock", range = "quad_mid", not_has = "l4_tail_slam", charged = "yes" }
+[rules.do]
+l4_switch_l2_high_power_three_breath_multi_start = 50
+l4_range_reset_dust_explosion_start = 50
+
+# 4. Long range (1500..5000)
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_long" }
+do = "l4_breath_single"
+group = "quad_long_fire"
+tag = "far_single"
+label = "P1 4足(1500~5000) 单发火球"
+label_en = "P1 Quad 1500-5000 Single Fireball"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_long" }
+do = "l4_breath_single"
+group = "quad_long_fire"
+tag = ["guard", "far_single"]
+label = "P1 4足倒后(1500~5000) 单发火球"
+label_en = "P1 Quad Knock 1500-5000 Single"
+
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_long" }
+do = "l4_breath_multi_start_01"
+group = "quad_long_fire"
+tag = "far_multi"
+label = "P1 4足(1500~5000) 三连火球"
+label_en = "P1 Quad 1500-5000 Triple Fireball"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_long" }
+do = "l4_breath_multi_start_01"
+group = "quad_long_fire"
+tag = ["guard", "far_multi"]
+label = "P1 4足倒后(1500~5000) 三连火球"
+label_en = "P1 Quad Knock 1500-5000 Triple"
+
+# 5. Ultra-Long range (>=5000)
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_ultra" }
+do = "l4_breath_single"
+group = "quad_ultra_fire"
+tag = "far_single"
+label = "P1 4足(>5000) 单发火球"
+label_en = "P1 Quad >5000 Single Fireball"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_ultra" }
+do = "l4_breath_single"
+group = "quad_ultra_fire"
+tag = ["guard", "far_single"]
+label = "P1 4足倒后(>5000) 单发火球"
+label_en = "P1 Quad Knock >5000 Single Fireball"
+
+[[rules]]
+when = { p1 = "quad", context = "main", range = "quad_ultra" }
+do = "l4_breath_multi_start_01"
+group = "quad_ultra_fire"
+tag = "far_multi"
+label = "P1 4足(>5000) 三连火球"
+label_en = "P1 Quad >5000 Triple Fireball"
+
+[[rules]]
+when = { p1 = "quad", context = "knock", range = "quad_ultra" }
+do = "l4_breath_multi_start_01"
+group = "quad_ultra_fire"
+tag = ["guard", "far_multi"]
+label = "P1 4足倒后(>5000) 三连火球"
+label_en = "P1 Quad Knock >5000 Triple Fireball"
+
+# 6. Quadruped P1 occluded compensation
+[[rules]]
+when = { context = "occluded", p1 = "quad" }
+do = "l4_breath_single"
+group = "quad_long_fire"
+tag = ["guard", "far_single"]
+label = "P1 4足遮挡补偿 单发火球"
+label_en = "P1 Quad Occluded Single Fireball"
+
+[[rules]]
+when = { context = "occluded", p1 = "quad" }
+do = "l4_breath_multi_start_01"
+group = "quad_long_fire"
+tag = ["guard", "far_multi"]
+label = "P1 4足遮挡补偿 三连火球"
+label_en = "P1 Quad Occluded Triple Fireball"
+
+# Optional legacy-compat `$rng status` group ID mapping for built-in Fatalis telemetry strings.
+[group_ids]
+bi_close_cone     = 1011
+bi_no_cone_chain  = 1012
+bi_front_carpet   = 1013
+bi_side_carpet    = 1014
+bi_back_tail      = 1015
+bi_far_carpet     = 1016
+bi_ultra_fireball = 1017
+bi_stance_guard   = 1018
+quad_close_rush   = 1021
+quad_close_snap   = 1022
+quad_mid_rush     = 1023
+quad_mid_5050     = 1024
+quad_tail_slam    = 1025
+quad_long_fire    = 1026
+quad_ultra_fire   = 1027

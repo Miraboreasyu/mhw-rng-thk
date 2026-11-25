@@ -6,4 +6,8 @@ build/
 *.exp
 *.lib
 *.ilk
+*.exe
 .vs/
+__pycache__/
+*.pyc
+*.tmp

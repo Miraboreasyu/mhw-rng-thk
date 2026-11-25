@@ -103,6 +103,7 @@ bool LoadPresetByName(const std::string& rawName,
         g_engine.activePresetDescEn = doc.descEn;
         g_engine.activePresetSource = sourceDesc;
         g_engine.presetRules        = std::move(doc.rules);
+        g_engine.presetContexts     = std::move(doc.contexts);
         g_engine.disabledTags       = std::move(doc.defaultDisabledTags);
 
         // Apply Fatalis facade tag toggles when loading `fatalis_p1_nasty`
@@ -324,8 +325,11 @@ void PrintThkStatus() {
     std::int32_t probeMon = -1;
     thk::ThkDiagCounters ds{};
     std::size_t trackerCnt = 0U;
-    thk::MonsterRuntimeTracker latest{};
     bool hasLatest = false;
+    std::uint32_t latestMonsterId = 0U;
+    std::uint64_t latestTotalDecisions = 0U;
+    std::size_t latestNodeCount = 0U;
+    std::size_t latestMoveCount = 0U;
 
     {
         std::lock_guard<std::mutex> lk(g_stateMx);
@@ -341,8 +345,11 @@ void PrintThkStatus() {
             if (t.inUse) ++trackerCnt;
         }
         if (const auto* lt = g_engine.FindLatestTracker()) {
-            latest    = *lt;
-            hasLatest = true;
+            latestMonsterId      = lt->monsterId;
+            latestTotalDecisions = lt->totalDecisions;
+            latestNodeCount      = lt->nodeCount;
+            latestMoveCount      = lt->moveCount;
+            hasLatest            = true;
         }
     }
 
@@ -368,9 +375,9 @@ void PrintThkStatus() {
     if (hasLatest) {
         g_host->ChatPrintf(en ? "[thk] Active inst:%zu | Last mon em=%u decisions:%llu nodes:%zu moves:%zu"
                               : u8"[thk] 活跃实例:%zu | 最近怪物 em=%u 总决策:%llu 节点类:%zu 招式类:%zu",
-                           trackerCnt, latest.monsterId,
-                           static_cast<unsigned long long>(latest.totalDecisions),
-                           latest.nodeCount, latest.moveCount);
+                           trackerCnt, latestMonsterId,
+                           static_cast<unsigned long long>(latestTotalDecisions),
+                           latestNodeCount, latestMoveCount);
     } else {
         g_host->ChatPrint(en ? "[thk] Usage: `$rng thk probe|nodes|stats|rule|seq|preset|reset|clear|diag|help`"
                              : u8"[thk] 用法: `$rng thk probe|nodes|stats|rule|seq|preset|reset|clear|diag|help`");
@@ -416,27 +423,30 @@ void PrintProbeLog() {
 
 void PrintNodesSummary(std::int32_t monFilter) {
     const bool en = MhwRng_HostIsEnglish(g_host);
-    thk::MonsterRuntimeTracker trk{};
     bool found = false;
+    std::uint32_t monsterId = 0U;
+    std::uint64_t totalDecisions = 0U;
+    std::vector<thk::NodeVisitEntry> items;
     {
         std::lock_guard<std::mutex> lk(g_stateMx);
         if (const auto* p = g_engine.FindLatestTracker(monFilter)) {
-            trk   = *p;
+            monsterId      = p->monsterId;
+            totalDecisions = p->totalDecisions;
+            items.assign(p->nodeVisits, p->nodeVisits + p->nodeCount);
             found = true;
         }
     }
-    if (!found || trk.nodeCount == 0U) {
+    if (!found || items.empty()) {
         g_host->ChatPrint(en ? "[thk] No node stats yet; enable `$rng thk probe on` or load a preset"
                              : u8"[thk] 暂无节点访问统计；开启 `$rng thk probe on` 或加载预设并进入战斗后查看");
         return;
     }
-    std::vector<thk::NodeVisitEntry> items(trk.nodeVisits, trk.nodeVisits + trk.nodeCount);
     std::sort(items.begin(), items.end(), [](const thk::NodeVisitEntry& a, const thk::NodeVisitEntry& b) {
         return a.count > b.count;
     });
     g_host->ChatPrintf(en ? "[thk] em=%u total=%llu, top nodes (%zu unique):"
                           : u8"[thk] em=%u 总决策=%llu, 访问最多的节点(共%zu种):",
-                       trk.monsterId, static_cast<unsigned long long>(trk.totalDecisions), items.size());
+                       monsterId, static_cast<unsigned long long>(totalDecisions), items.size());
     const std::size_t showN = std::min<std::size_t>(items.size(), 10U);
     for (std::size_t i = 0U; i < showN; ++i) {
         const auto& n = items[i];
@@ -448,12 +458,18 @@ void PrintNodesSummary(std::int32_t monFilter) {
 
 void PrintMoveStats(std::int32_t monFilter) {
     const bool en = MhwRng_HostIsEnglish(g_host);
-    thk::MonsterRuntimeTracker trk{};
     bool found = false;
+    std::uint32_t monsterId = 0U;
+    std::uint64_t totalDecisions = 0U;
+    std::vector<thk::MoveHitEntry> items;
+    thk::LastMoveContext lastMove{};
     {
         std::lock_guard<std::mutex> lk(g_stateMx);
         if (const auto* p = g_engine.FindLatestTracker(monFilter)) {
-            trk   = *p;
+            monsterId      = p->monsterId;
+            totalDecisions = p->totalDecisions;
+            items.assign(p->moveHits, p->moveHits + p->moveCount);
+            lastMove       = p->lastMove;
             found = true;
         }
     }
@@ -462,13 +478,18 @@ void PrintMoveStats(std::int32_t monFilter) {
                              : u8"[thk] 暂无怪物出招计数；开启 `$rng thk probe on` 或规则后自动累计");
         return;
     }
-    std::vector<thk::MoveHitEntry> items(trk.moveHits, trk.moveHits + trk.moveCount);
+    if (lastMove.valid) {
+        g_host->ChatPrintf(en ? "[thk] Last move: %d:%d (from d=%u f=%d node=%d seg0=%d)"
+                              : u8"[thk] 上一招: %d:%d (来自 d=%u f=%d node=%d seg0=%d)",
+                           lastMove.moveFile, lastMove.moveNode, lastMove.depth,
+                           lastMove.file, lastMove.node, lastMove.seg0);
+    }
     std::sort(items.begin(), items.end(), [](const thk::MoveHitEntry& a, const thk::MoveHitEntry& b) {
         return (a.controlledCount + a.naturalCount) > (b.controlledCount + b.naturalCount);
     });
     g_host->ChatPrintf(en ? "[thk] em=%u total=%llu, recorded moves (%zu unique):"
                           : u8"[thk] em=%u 总决策=%llu, 已记录出招(%zu种):",
-                       trk.monsterId, static_cast<unsigned long long>(trk.totalDecisions), items.size());
+                       monsterId, static_cast<unsigned long long>(totalDecisions), items.size());
     const std::size_t showN = std::min<std::size_t>(items.size(), 12U);
     for (std::size_t i = 0U; i < showN; ++i) {
         const auto& m = items[i];
@@ -512,6 +533,38 @@ bool ParseCommonModifiers(int startIdx,
         } else if (kLow == "caller" || kLow == "callers") {
             if (!thk::ParseIntList(vLow, rule.filter.callers, thk::kMaxFilterItems, rule.filter.callerCount)) {
                 outErr = en ? "Invalid caller" : u8"无效 caller";
+                return false;
+            }
+        } else if (kLow == "prev" || kLow == "prev_move") {
+            if (!thk::ParseMoveList(vLow, rule.filter.prevMoveFiles, rule.filter.prevMoveNodes,
+                                    thk::kMaxFilterItems, rule.filter.prevMoveCount)) {
+                outErr = en ? "Invalid prev move (use file:node)" : u8"无效 prev 招式(格式 file:node)";
+                return false;
+            }
+        } else if (kLow == "prev_d" || kLow == "prev_depth") {
+            if (vLow == "*" || vLow == "any") rule.filter.prevDepth = -1;
+            else if (!thk::ParseSignedIntStrict(vLow, rule.filter.prevDepth) || rule.filter.prevDepth < 0) {
+                outErr = en ? "Invalid prev_d" : u8"无效 prev_d";
+                return false;
+            }
+        } else if (kLow == "prev_f" || kLow == "prev_file") {
+            if (!thk::ParseIntList(vLow, rule.filter.prevFiles, thk::kMaxFilterItems, rule.filter.prevFileCount)) {
+                outErr = en ? "Invalid prev_f" : u8"无效 prev_f";
+                return false;
+            }
+        } else if (kLow == "prev_node" || kLow == "prev_nodes") {
+            if (!thk::ParseIntList(vLow, rule.filter.prevNodes, thk::kMaxFilterItems, rule.filter.prevNodeCount)) {
+                outErr = en ? "Invalid prev_node" : u8"无效 prev_node";
+                return false;
+            }
+        } else if (kLow == "prev_seg0") {
+            if (!thk::ParseSeg0Range(vLow, rule.filter.prevSeg0Min, rule.filter.prevSeg0Max)) {
+                outErr = en ? "Invalid prev_seg0" : u8"无效 prev_seg0";
+                return false;
+            }
+        } else if (kLow == "prev_caller" || kLow == "prev_callers") {
+            if (!thk::ParseIntList(vLow, rule.filter.prevCallers, thk::kMaxFilterItems, rule.filter.prevCallerCount)) {
+                outErr = en ? "Invalid prev_caller" : u8"无效 prev_caller";
                 return false;
             }
         } else if (kLow == "scope") {
@@ -725,6 +778,7 @@ void HandlePresetCmd(int argc, const char* const* argv) {
             g_engine.activePresetDescEn.clear();
             g_engine.activePresetSource.clear();
             g_engine.presetRules.clear();
+            g_engine.presetContexts.clear();
             g_engine.disabledTags.clear();
             stayActive = g_engine.NeedsInspection();
         }
@@ -862,6 +916,7 @@ void __fastcall Cmd_Thk(int argc, const char* const* argv, const char*, void*) {
             g_engine.activePresetDescEn.clear();
             g_engine.activePresetSource.clear();
             g_engine.presetRules.clear();
+            g_engine.presetContexts.clear();
             g_engine.disabledTags.clear();
             g_engine.probeEnabled       = false;
             g_engine.probeMonsterFilter = -1;
@@ -1003,6 +1058,7 @@ void __fastcall Cmd_Fatalis(int argc, const char* const* argv, const char*, void
                 g_engine.activePresetDescEn.clear();
                 g_engine.activePresetSource.clear();
                 g_engine.presetRules.clear();
+                g_engine.presetContexts.clear();
             }
             stayActive = g_engine.NeedsInspection();
         }
@@ -1180,14 +1236,16 @@ void __fastcall Complete_Thk(const char*,
 
     if ((a0 == "seq" || a0 == "sequence") && argc == 5) {
         static const char* const kSeqMods[] = {
-            "loop", "hold", "once", "scope=fired", "scope=node", "scope=total", "after=", "until="
+            "loop", "hold", "once", "scope=fired", "scope=node", "scope=total", "after=", "until=",
+            "prev=", "prev_d=", "prev_f=", "prev_node=", "prev_seg0=", "prev_caller="
         };
         for (const char* m : kSeqMods) addCand(m, sinkCtx);
         return;
     }
     if ((a0 == "rule" || a0 == "rules") && a1 == "add" && argc >= 6) {
         static const char* const kRuleMods[] = {
-            "after=", "until=", "every=", "when=rule", "when=node", "when=total"
+            "after=", "until=", "every=", "when=rule", "when=node", "when=total",
+            "prev=", "prev_d=", "prev_f=", "prev_node=", "prev_seg0=", "prev_caller="
         };
         for (const char* m : kRuleMods) addCand(m, sinkCtx);
     }
@@ -1197,8 +1255,8 @@ const MhwRngPluginDescriptor kPluginDesc = {
     kMhwRngApiVersion,
     "thk",
     u8"通用THK随机节点探测与纯RNG控招引擎",
-    "1.3.0",
-    u8"探测任意怪物THK随机节点、记录出招次数，并支持计数门控、概率组合、序列、外部预设与多语言"
+    "1.4.0",
+    u8"探测任意怪物THK节点、记录出招上下文，并支持门控/权重/序列/上下文化prev与声明式预设"
 };
 
 } // namespace

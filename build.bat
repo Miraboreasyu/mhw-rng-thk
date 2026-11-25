@@ -68,12 +68,12 @@ if /I "%~1"=="--deploy" (
         echo ERROR: Failed copying to "%GAME_PLUG_DIR%\rng_thk.dll"
         exit /b 1
     )
-    copy /y "%ROOT%presets\fatalis_p1_nasty.txt" "%GAME_PLUG_DIR%\thk_presets\fatalis_p1_nasty.txt" >nul
+    copy /y "%ROOT%presets\*.txt" "%GAME_PLUG_DIR%\thk_presets\" >nul
     if errorlevel 1 (
-        echo ERROR: Failed copying preset to "%GAME_PLUG_DIR%\thk_presets\fatalis_p1_nasty.txt"
+        echo ERROR: Failed copying presets to "%GAME_PLUG_DIR%\thk_presets\"
         exit /b 1
     )
-    echo [OK] Deployed to "%GAME_PLUG_DIR%\rng_thk.dll" and thk_presets\fatalis_p1_nasty.txt ^(type `$rng reload thk` in game^)
+    echo [OK] Deployed to "%GAME_PLUG_DIR%\rng_thk.dll" and thk_presets\*.txt ^(type `$rng reload thk` in game^)
 )
 
 exit /b 0

@@ -18,29 +18,36 @@
 
 ---
 
-## 二、文件结构总览（3 类语句）
+## 二、文件结构总览（4 类语句）
 
-一个 `.txt` 预设由**注释/空行**、**顶部元信息**、**规则行（`rule`）**三部分组成：
+一个 `.txt` 预设由**注释/空行**、**顶部元信息**、**命名上下文块（`ctx`）**、**规则行（`rule`）**四部分组成：
 
 ```ini
 # 以 # 或 ; 开头为整行注释；[section] 标题行会被自动跳过
 name = my_monster_preset
 desc = 某怪物测试预设
+desc_en = Monster Test Preset
 disable_tag = optional_hard
 
-rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环两连"
+# 可选：定义可复用的上一招多槽位上下文（同名多个 ctx 之间为 OR 关系）
+ctx tail_ctx mon=101 d=0 f=0,4 node=77 seg0=13..38
+
+rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环两连" label_en="Example 2-Step Loop"
 ```
 
 1. **注释与空白**：
    - 整行以 `#` 或 `;` 开头视作注释；`[meta]`、`[rules]` 等方括号分节行会被忽略，仅作视觉分隔。
-   - 在 `rule` 行中，引号外出现的 `#` 及其后方文本也会被当作行尾注释忽略。
+   - 在 `ctx` / `rule` 行中，引号外出现的 `#` 及其后方文本也会被当作行尾注释忽略。
 2. **顶部元信息（允许 `=` 两侧带空格）**：
    - `name = <字符串>`：预设名称（若省略则取文件名）。
-   - `desc = <字符串>`（别名 `description`）：一句话描述。
+   - `desc = <字符串>` / `desc_en = <字符串>`（别名 `description` / `description_en`）：中英文一句话描述。
    - `disable_tag = <t1,t2,...>`（别名 `disable_tags`）：加载本预设时**默认禁用**的规则标签列表（全小写、逗号分隔）。
-3. **规则行（语法限制：每个 `key=value` 字段的 `=` 两侧不能有空格）**：
+3. **命名上下文定义（`ctx`，必须写在引用它的 `rule` 之前）**：
+   - 格式：`ctx <名称> [mon=...] [d=...] [f=...] [node=...] [seg0=...] [caller=...] [move=F:N,...]`
+   - `<名称>` 长度不超过 **63 个 UTF-8 字节**，同名可写多行以表示多组 `(d, f, node, seg0, caller, move)` 槽位的逻辑 **OR**；单行内部各键之间为逻辑 **AND**。
+4. **规则行（语法限制：每个 `key=value` 字段的 `=` 两侧不能有空格）**：
    - 必须以 `rule ` 开头，由空格分隔多个参数块：
-     `rule [过滤条件...] -> <目标或序列> [步进与计数条件...] [tag=...] [label="..."]`
+     `rule [过滤条件...] -> <目标或序列> [步进/计数/上一招上下文/标签...]`
    - 正确写法：`mon=101 d=0 node=75,76 label="P1 <900 孕吐"`
    - 错误写法：`mon = 101`（`=` 两侧有空格会报错）或 `label=P1 <900`（含空格的值未加英文双引号）。
 
@@ -60,6 +67,9 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
 | `node` / `nodes` | `node=75`、`node=75,76`、`node=*` | 当前节点数组下标（即 `seg[END] + 0x24 - 10000`），逗号分隔最多 **8 个** |
 | `seg0` | `seg0=*`、`seg0=13`、`seg0=25+`、`seg0=1..9` | 本次 `RANDOM` 块第一个候选段的下标（游戏常用不同起始段区分方位/条件扇区） |
 | `caller` / `callers` | `caller=75,76`、`caller=129,130` | 仅对 `d=1` 有效：匹配完整 Frame 0 调用链 `callerChain[]`，兼容直跳与 1-hop 包装节点，最多 **8 个** |
+| `prev` / `prev_move` | `prev=55:175`、`prev=55:175,55:179` | 匹配上次实际执行的**具体招式**（控招与原版掷骰均记，`ENDR`/`RANDOM`/`ELSER` 控制流不覆盖）；最多 **8 个** `file:node` |
+| `prev_d` / `prev_f` / `prev_node` / `prev_seg0` / `prev_caller` | `prev_d=0 prev_node=75 prev_seg0=36` | 内联匹配上一具体招式发起时的决策上下文（`LastMoveContext`）；所有已填字段之间为 **AND** 关系，**可不写 `prev=` 单独使用** |
+| `prev_ctx` | `prev_ctx=tail_ctx` | 引用前面用 `ctx <名称> ...` 定义的命名多槽上下文（槽间 **OR**、与同规则内联 `prev*` 字段为 **AND**），无状态不占计数槽 |
 
 - **`seg0` 语法细节**：
   - `*` / `any`：任意 `seg0`。
@@ -147,7 +157,8 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
 | :--- | :--- | :--- |
 | `tag` / `tags` | `tag=guard`、`tag=guard,far_single` | 给规则打上标签（逗号分隔）。只要该规则带有**任意一个**当前被禁用的标签，引擎便跳过该规则 |
 | `cond` | `cond=1011` | 报告给微内核 `mhw_rng` 的 `CondID` 编号（用于 `$rng top` / `dump` 分组统计）；省略时预设规则从 `2001` 递增 |
-| `label` | `label="P1 <900 孕吐"` | 日志与 `$rng fatalis history` / `thk diag` 中显示的可读标签；包含空格时**必须用英文双引号**包裹 |
+| `label` / `label_en` | `label="P1 <900 孕吐" label_en="P1 Close Cone"` | 日志与 `$rng fatalis history` / `thk diag` 中显示的中英文标签；含空格时**必须用英文双引号**包裹 |
+| 元信息字节上限 | `<= 63` UTF-8 字节 | `tag`/`tags`、`label`、`label_en` 与 `ctx <名称>` 内部存储均为 `char[64]`，超出 **63 字节**会被截断 |
 
 ---
 
@@ -158,14 +169,18 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185 end=loop label="示例循环
    - 再扫描当前加载的 `.txt` 预设文件（严格按文件**从上到下**的书写顺序）。
    - 第一条同时满足“过滤条件通过 + 门控通过 + 候选表中存在可用目标”的规则会立刻生效并返回求解值，停止继续向下匹配。
    - **例外（主动放行）**：当 `vanilla` 步被执行，或 `end=once` 序列已经播完时，本次决策会明确退回原版随机，不会继续匹配后面的预设规则。
-2. **多怪物实例自动归零**：
-   - 引擎内部按 `(Monster*, MonsterID)` 追踪最多 8 个活跃实例。重新接任务、换区新刷出怪物或同一场景同时存在多只同种怪物时，每只实例拥有独立的计数与序列游标；`$rng thk reset` 可手动清零全部计数。
+2. **多怪物实例自动归零与世界事件重置**：
+   - 引擎内部按 `(Monster*, MonsterID)` 追踪最多 8 个活跃实例。重新接任务、换区新刷出怪物或同一场景同时存在多只同种怪物时，每只实例拥有独立的计数、序列游标与上一招上下文（`LastMoveContext`）；`$rng thk reset` 会将全部计数、游标与上一招上下文一并清零。
+   - 若同时加载了 `mhw_world.dll`，引擎会在**进入任务、离开任务及返回标题画面**时自动清零全部运行时状态，避免上一场任务的 `prev*` / `prev_ctx` 或计数门控串入下一场战斗。
 
 ---
 
 ## 五、编写新怪物预设的工作流
 
-为未知怪物（例如 `MonsterID = 91` 金狮子）定制出招时，无需预先静态分析 `.thk`：
+> [!TIP]
+> **推荐优先使用离线声明式 TOML 工具链**（[`tools/thk_meta_tool.py`](tools/thk_meta_tool.py) + [`docs/TOML_LANGUAGE_MANUAL.md`](docs/TOML_LANGUAGE_MANUAL.md)）：可直接静态反编译 `.thk` 中的距离/角度/阶段条件、`cands` 权重与多段副作用，并用 `query` / `coverage` / `compile` 自动生成本文档格式的 `.txt` 预设与 `ctx` 上下文块。下面流程适用于**游戏内临场探测**或**不借助离线解包直接手写简单规则**：
+
+为未知怪物（例如 `MonsterID = 91` 金狮子）定制出招时，也可直接通过游戏内探测实时录制节点后手写 `.txt`：
 
 ### 第 1 步：游戏内开启实时探针
 在聊天框输入：
@@ -203,7 +218,7 @@ rule mon=91 d=0 f=0 node=12 seg0=1 -> 55:172,55:185,55:297 end=loop label="三�
 ```text
 $rng thk preset load rajang_test
 ```
-之后每次改动 `.txt` 只需输入 `$rng thk preset reload`；再用 `$rng thk stats 91` 或 `$rng thk diag` 观察实际命中情况与未命中日志。
+之后每次改动 `.txt` 只需输入 `$rng thk preset reload`；再用 `$rng thk stats 91` 或 `$rng thk diag` 观察实际命中情况、未命中日志以及最近一招上下文摘要 `Last move: f:n (from d=... f=... node=... seg0=...)`（用于核对 `prev*` / `prev_ctx` 条件）。
 
 ### 第 4 步：常用规则模板与黑龙预设示例
 
@@ -251,18 +266,34 @@ rule mon=101 d=0 f=0,4 node=79 seg0=* -> 55:179 cond=1017 tag=far_single label="
 rule mon=101 d=0 f=0,4 node=79 seg0=* -> 55:220 cond=1017 tag=far_multi label="P1 2足>4500 三连火球"
 ```
 
+#### 模板 6：上一招及其发起上下文联动（`ctx` + `prev` / `prev_ctx` 与内联 `prev_node` / `prev_seg0`）
+```ini
+# 1. 多槽位 ctx 定义在前（同名多行表示 OR：曾从 n77.s13..38 或 n83.s13 发起招式）
+ctx bi_far_tail mon=101 d=0 f=0,4 node=77 seg0=13..38
+ctx bi_far_tail mon=101 d=0 f=0,4 node=83 seg0=13
+
+# 2. 同时限定上一招目标动作与发起上下文（prev 与 prev_ctx 必须同时满足）
+rule mon=101 d=0 f=0,4 node=77,78 seg0=* -> 55:179(50)+55:220(50) prev=55:175 prev_ctx=bi_far_tail label="远程甩尾后必单/三火球"
+
+# 3. 仅限定发起上下文（不限具体招式），或单点直接内联 prev_d/prev_node/prev_seg0
+rule mon=101 d=0 f=0,4 node=78 seg0=* -> 55:220 prev_ctx=bi_far_tail label="承接指定上下文节点"
+rule mon=101 d=0 f=0,4 node=75 seg0=1 -> 55:297 prev=55:175 prev_d=0 prev_node=75 prev_seg0=36 label="近身正背甩尾后变招"
+```
+
 ---
 
 ## 六、静态上限与排查清单
 
-1. **静态数组上限**（受限于无堆分配实时回调设计）：
-   - 单条规则最多 `8` 个 `f`（文件槽位）、`8` 个 `node`、`8` 个 `caller`、`16` 个序列步骤，每个步骤最多 `8` 个加权选项。
-   - 单只活跃怪物最多同时记录 `64` 种不同 `(d,f,node,seg0)` 节点、`64` 种招式 `file:node` 与 `64` 条规则计数；全局最多保留 `8` 个并发怪物实例槽。
+1. **静态数组与容量上限**（受限于无堆分配实时回调设计）：
+   - 单条规则与单个 `ctx` 槽位中，`f`/`file`、`node`、`caller`、`prev`（及对应 `prev_f`/`prev_node`/`prev_caller`）各自最多 **`8` 个**；每条规则最多 **`16` 个序列步骤**，每个步骤最多 **`8` 个加权选项**。
+   - 单只活跃怪物最多同时记录 `64` 种不同 `(d,f,node,seg0)` 节点、`64` 种招式 `file:node`，以及最多 **`1024` 条有状态规则计数槽（`kMaxRuleCounters = 1024U`，懒分配）**；无状态单步规则（如常规 `do`/概率组合/无计数序列、纯 `prev`/`prev_ctx` 上下文过滤）消耗 **`0` 槽位**。全局最多保留 `8` 个并发怪物实例槽。
+   - `tag`/`tags`、`label`、`label_en` 与 `ctx` 名称最大有效长度为 **`63` 个 UTF-8 字节**。
 2. **常见错误与现象排查**：
-   - **加载报 `expected key=value` 或 `unknown key`**：检查 `rule` 行内部是否在 `=` 两侧多写了空格，或者 `label=...` 含空格却遗漏英文双引号 `"`，或使用了中文全角引号。
+   - **加载报 `expected key=value`、`unknown key` 或 `unknown prev_ctx '<name>'`**：检查 `rule` / `ctx` 行内部是否在 `=` 两侧多写了空格、`label=...` 含空格却遗漏英文双引号 `"` 或误用了中文全角引号；若报 `unknown prev_ctx`，确认对应的 `ctx <name> ...` 定义写在引用它的 `rule` **上方**（且名称拼写一致）。
    - **中文 `desc`/`label` 聊天框乱码**：文件需保存为 **UTF-8 无 BOM** 格式。
    - **规则写了却从不触发**：
      1. 输入 `$rng thk diag` 查看最近一次未命中的 `(mon, d, f, node, seg0, caller, tgt0)`，核对实际 `seg0` 与预设是否一致（很多怪物同一个 `node` 按距离/角度拆出了多个不同的起始段 `seg0`）。
      2. 确认目标招式在当前候选表中是否存在且**权重大于 `0`**（权重为 `0` 的分枝原版也不会抽中，需要靠备选 `A|B` 兜底）。
-     3. 若文件上方已有另一条 `node` 相同的规则先匹配生效，导致下方同节点规则不会执行；应将范围更窄、带次数门控或特定标签的规则写在**更靠前的位置**。
+     3. 若使用了 `prev` / `prev_d` / `prev_node` / `prev_seg0` / `prev_ctx`，输入 `$rng thk stats` 检查打印的 `Last move: f:n (from d=... f=... node=... seg0=...)`，确认上一招实际目标及发起上下文与规则一致（控制流节点 `ENDR`/`RANDOM`/`ELSER` 不会刷新 `Last move`）。
+     4. 若文件上方已有另一条 `node` 相同的规则先匹配生效，导致下方同节点规则不会执行；应将范围更窄、带次数门控/`prev` 门控或特定标签的规则写在**更靠前的位置**。
    - **`presets/fatalis_p1_nasty.txt` 找不到时会怎样**：`fatalis_p1_nasty` 在插件内留有一份同格式的内置兜底文本，自定义其它名称的预设则必须存在于 `nativePC\plugins\mhw_rng\thk_presets\` 下。
