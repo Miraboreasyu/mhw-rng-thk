@@ -32,7 +32,7 @@ if "%CAND_DIR%"=="" (
 )
 
 if not exist "%ROOT%include" mkdir "%ROOT%include"
-for %%H in (mhw_rng_api.h mhw_rng_math.h mhw_1523_world.h mhw_world_api.h mhw_catalog_api.h) do (
+for %%H in (mhw_rng_api.h mhw_rng_math.h mhw_1523_world.h mhw_world_api.h mhw_catalog_api.h mhw_thk_api.h) do (
     if exist "%CAND_DIR%\%%H" (
         copy /y "%CAND_DIR%\%%H" "%ROOT%include\%%H" >nul
         if errorlevel 1 (

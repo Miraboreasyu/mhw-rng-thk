@@ -14,6 +14,7 @@
 #include "thk_preset_io.h"
 #include "presets/fatalis_p1_nasty.h"
 #include "mhw_world_api.h"
+#include "mhw_thk_api.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -24,17 +25,25 @@
 
 namespace {
 
+struct CustomRuleCmdRecord {
+    std::uint32_t ruleId = 0U;
+    std::string   cmdLine{};
+};
+
 const MhwRngHostApi* g_host   = nullptr;
 MhwRngPluginId       g_selfId = 0U;
 
 // Strict leaf mutex: NEVER call `g_host->...` or `ctx->DrawDeterministic(...)` while holding `g_stateMx`!
-std::mutex           g_stateMx;
-thk::ThkEngine       g_engine{};
-bool                 g_fatalisFarMulti    = false;
-bool                 g_fatalisGuards      = true;
-MhwRngHookHandle     g_worldEvQuestEnter  = kMhwRngInvalidHandle;
-MhwRngHookHandle     g_worldEvQuestLeave  = kMhwRngInvalidHandle;
-MhwRngHookHandle     g_worldEvTitleReturn = kMhwRngInvalidHandle;
+std::mutex                       g_stateMx;
+thk::ThkEngine                   g_engine{};
+std::string                      g_activePresetText{};
+std::string                      g_activePresetSha256{};
+std::vector<CustomRuleCmdRecord> g_customRuleCmds{};
+bool                             g_fatalisFarMulti    = false;
+bool                             g_fatalisGuards      = true;
+MhwRngHookHandle                 g_worldEvQuestEnter  = kMhwRngInvalidHandle;
+MhwRngHookHandle                 g_worldEvQuestLeave  = kMhwRngInvalidHandle;
+MhwRngHookHandle                 g_worldEvTitleReturn = kMhwRngInvalidHandle;
 
 void __fastcall OnWorldEvent(const MhwRngCustomEvent* ev, void*) {
     if (!ev || !ev->topic) return;
@@ -53,13 +62,17 @@ std::string GetPresetDir() {
     return std::string(subDir) + "\\thk_presets";
 }
 
-bool LoadPresetByName(const std::string& rawName,
-                      std::string& outLoadedName,
-                      std::string& outDesc,
-                      std::string& outSource,
-                      std::size_t& outRuleCount,
-                      std::string& outErr) {
+bool LoadPresetDocByNameUnlocked(const std::string& rawName,
+                                 thk::ThkPresetDocument& outDoc,
+                                 std::string& outRawText,
+                                 std::string& outSha256,
+                                 std::string& outSource,
+                                 std::string& outErr) {
     outErr.clear();
+    outRawText.clear();
+    outSha256.clear();
+    outSource.clear();
+
     std::string cleanName = thk::TrimAscii(rawName);
     if (cleanName.empty()) {
         outErr = "preset name is empty";
@@ -70,25 +83,23 @@ bool LoadPresetByName(const std::string& rawName,
         cleanName.resize(cleanName.size() - 4U);
     }
 
-    thk::ThkPresetDocument doc{};
     const std::string pDir = GetPresetDir();
-    std::string sourceDesc;
     bool ok = false;
 
     if (!pDir.empty()) {
         const std::string filePath = pDir + "\\" + cleanName + ".txt";
         if (::GetFileAttributesA(filePath.c_str()) != INVALID_FILE_ATTRIBUTES) {
-            ok = thk::LoadPresetFromFile(filePath, cleanName, doc, outErr);
+            ok = thk::LoadPresetFromFile(filePath, cleanName, outDoc, outErr, &outRawText);
             if (!ok) return false;
-            sourceDesc = "file:thk_presets\\" + cleanName + ".txt";
+            outSource = "file:thk_presets\\" + cleanName + ".txt";
         }
     }
 
     if (!ok && thk::LowerAscii(cleanName) == "fatalis_p1_nasty") {
-        ok = thk::ParsePresetFromText(thk::presets::kBuiltinFatalisP1NastyPresetTxt,
-                                      "fatalis_p1_nasty", doc, outErr);
+        outRawText = thk::presets::kBuiltinFatalisP1NastyPresetTxt;
+        ok = thk::ParsePresetFromText(outRawText, "fatalis_p1_nasty", outDoc, outErr);
         if (!ok) return false;
-        sourceDesc = "builtin";
+        outSource = "builtin";
     }
 
     if (!ok) {
@@ -96,15 +107,38 @@ bool LoadPresetByName(const std::string& rawName,
         return false;
     }
 
+    if (outDoc.name.empty()) {
+        outDoc.name = cleanName;
+    }
+    outSha256 = thk::Sha256HexLower(outRawText);
+    return true;
+}
+
+bool LoadPresetByName(const std::string& rawName,
+                      std::string& outLoadedName,
+                      std::string& outDesc,
+                      std::string& outSource,
+                      std::size_t& outRuleCount,
+                      std::string& outErr) {
+    thk::ThkPresetDocument doc{};
+    std::string rawText;
+    std::string sha256;
+    std::string sourceDesc;
+    if (!LoadPresetDocByNameUnlocked(rawName, doc, rawText, sha256, sourceDesc, outErr)) {
+        return false;
+    }
+
     {
         std::lock_guard<std::mutex> lk(g_stateMx);
-        g_engine.activePresetName   = doc.name.empty() ? cleanName : doc.name;
+        g_engine.activePresetName   = doc.name;
         g_engine.activePresetDesc   = doc.desc;
         g_engine.activePresetDescEn = doc.descEn;
         g_engine.activePresetSource = sourceDesc;
         g_engine.presetRules        = std::move(doc.rules);
         g_engine.presetContexts     = std::move(doc.contexts);
         g_engine.disabledTags       = std::move(doc.defaultDisabledTags);
+        g_activePresetText          = std::move(rawText);
+        g_activePresetSha256        = std::move(sha256);
 
         // Apply Fatalis facade tag toggles when loading `fatalis_p1_nasty`
         if (thk::LowerAscii(g_engine.activePresetName) == "fatalis_p1_nasty") {
@@ -119,6 +153,32 @@ bool LoadPresetByName(const std::string& rawName,
         outRuleCount  = g_engine.presetRules.size();
     }
     return true;
+}
+
+std::string FormatCanonicalCustomCmd(const char* prefix,
+                                     int startArg,
+                                     int argc,
+                                     const char* const* argv) {
+    std::string out = prefix ? prefix : "";
+    for (int i = startArg; i < argc; ++i) {
+        if (!argv || !argv[i]) continue;
+        const std::string tok(argv[i]);
+        if (tok.empty()) continue;
+        if (!out.empty()) out.push_back(' ');
+        const bool needQuote = (tok.find(' ') != std::string::npos ||
+                                tok.find('\t') != std::string::npos ||
+                                tok.find('#') != std::string::npos);
+        if (needQuote) {
+            out.push_back('"');
+            for (char c : tok) {
+                if (c != '"') out.push_back(c);
+            }
+            out.push_back('"');
+        } else {
+            out += tok;
+        }
+    }
+    return out;
 }
 
 void EnsureTakeoverOn() {
@@ -658,6 +718,7 @@ void HandleRuleCmd(int argc, const char* const* argv) {
         {
             std::lock_guard<std::mutex> lk(g_stateMx);
             g_engine.customRules.clear();
+            g_customRuleCmds.clear();
             stayActive = g_engine.NeedsInspection();
         }
         if (!stayActive) g_host->ClearSlotAllConditions(thk::kRvaThkUpdateRandom);
@@ -681,6 +742,10 @@ void HandleRuleCmd(int argc, const char* const* argv) {
             const auto oldSize = v.size();
             v.erase(std::remove_if(v.begin(), v.end(), [id](const thk::ThkRule& r) { return r.ruleId == id; }), v.end());
             erased = (v.size() != oldSize);
+            g_customRuleCmds.erase(
+                std::remove_if(g_customRuleCmds.begin(), g_customRuleCmds.end(),
+                               [id](const CustomRuleCmdRecord& rec) { return rec.ruleId == id; }),
+                g_customRuleCmds.end());
         }
         g_host->ChatPrintf(en ? "[thk] Rule #%u %s" : u8"[thk] 规则 #%u %s",
                            id, erased ? (en ? "deleted" : u8"已删除") : (en ? "not found" : u8"未找到"));
@@ -699,6 +764,7 @@ void HandleRuleCmd(int argc, const char* const* argv) {
             g_host->ChatPrintf(en ? "[thk] Failed adding rule: %s" : u8"[thk] 添加规则失败: %s", err.c_str());
             return;
         }
+        std::string canonCmd = FormatCanonicalCustomCmd("rule add", 2, argc, argv);
         EnsureTakeoverOn();
         std::uint32_t assignedId = 0U;
         {
@@ -708,6 +774,7 @@ void HandleRuleCmd(int argc, const char* const* argv) {
             if (r.label[0] == '\0') std::snprintf(r.label, sizeof(r.label), "rule#%u", r.ruleId);
             assignedId = r.ruleId;
             g_engine.customRules.push_back(r);
+            g_customRuleCmds.push_back(CustomRuleCmdRecord{ assignedId, std::move(canonCmd) });
         }
         g_host->ChatPrintf(en ? "[thk] Added rule #%u (cond=%u, steps=%u)" : u8"[thk] 已添加规则 #%u (cond=%u, steps=%u)",
                            assignedId, 2000U + assignedId, static_cast<unsigned>(r.stepCount));
@@ -731,6 +798,7 @@ void HandleSeqCmd(int argc, const char* const* argv) {
         g_host->ChatPrintf(en ? "[thk] Failed adding seq: %s" : u8"[thk] 添加序列失败: %s", err.c_str());
         return;
     }
+    std::string canonCmd = FormatCanonicalCustomCmd("seq", 1, argc, argv);
     EnsureTakeoverOn();
     std::uint32_t assignedId = 0U;
     {
@@ -740,6 +808,7 @@ void HandleSeqCmd(int argc, const char* const* argv) {
         if (r.label[0] == '\0') std::snprintf(r.label, sizeof(r.label), "seq#%u", r.ruleId);
         assignedId = r.ruleId;
         g_engine.customRules.push_back(r);
+        g_customRuleCmds.push_back(CustomRuleCmdRecord{ assignedId, std::move(canonCmd) });
     }
     g_host->ChatPrintf(en ? "[thk] Added sequence #%u (steps=%u, end=%s)" : u8"[thk] 已添加出招序列 #%u (步数=%u, 模式=%s)",
                        assignedId,
@@ -780,6 +849,8 @@ void HandlePresetCmd(int argc, const char* const* argv) {
             g_engine.presetRules.clear();
             g_engine.presetContexts.clear();
             g_engine.disabledTags.clear();
+            g_activePresetText.clear();
+            g_activePresetSha256.clear();
             stayActive = g_engine.NeedsInspection();
         }
         if (!stayActive) g_host->ClearSlotAllConditions(thk::kRvaThkUpdateRandom);
@@ -911,6 +982,7 @@ void __fastcall Cmd_Thk(int argc, const char* const* argv, const char*, void*) {
         {
             std::lock_guard<std::mutex> lk(g_stateMx);
             g_engine.customRules.clear();
+            g_customRuleCmds.clear();
             g_engine.activePresetName.clear();
             g_engine.activePresetDesc.clear();
             g_engine.activePresetDescEn.clear();
@@ -918,6 +990,8 @@ void __fastcall Cmd_Thk(int argc, const char* const* argv, const char*, void*) {
             g_engine.presetRules.clear();
             g_engine.presetContexts.clear();
             g_engine.disabledTags.clear();
+            g_activePresetText.clear();
+            g_activePresetSha256.clear();
             g_engine.probeEnabled       = false;
             g_engine.probeMonsterFilter = -1;
         }
@@ -1059,6 +1133,9 @@ void __fastcall Cmd_Fatalis(int argc, const char* const* argv, const char*, void
                 g_engine.activePresetSource.clear();
                 g_engine.presetRules.clear();
                 g_engine.presetContexts.clear();
+                g_engine.disabledTags.clear();
+                g_activePresetText.clear();
+                g_activePresetSha256.clear();
             }
             stayActive = g_engine.NeedsInspection();
         }
@@ -1251,11 +1328,295 @@ void __fastcall Complete_Thk(const char*,
     }
 }
 
+// ============================================================================
+//  MIRA v3.5 Companion Service (`"mhw.thk"`, v1)
+// ============================================================================
+
+bool WriteCStringExact(char* dst, std::size_t cap, const std::string& val) noexcept {
+    if (!dst) return true;
+    if (cap == 0U) return false;
+    thk::CopyTrunc(dst, cap, val.c_str());
+    return (val.size() + 1U <= cap);
+}
+
+bool WriteProbedString(char* dst,
+                       std::size_t cap,
+                       std::size_t* outNeed,
+                       const std::string& val) noexcept {
+    const std::size_t need = val.empty() ? 0U : (val.size() + 1U);
+    if (outNeed) *outNeed = need;
+    if (!dst) return true;
+    if (cap == 0U) return false;
+    thk::CopyTrunc(dst, cap, val.c_str());
+    return (val.size() + 1U <= cap);
+}
+
+bool ParseCustomCmdLineUnlocked(const std::string& rawLine,
+                                thk::ThkRule& outRule,
+                                std::string& outCanonCmd,
+                                bool& outIsSeq,
+                                std::string& outErr) {
+    outRule     = thk::ThkRule{};
+    outCanonCmd.clear();
+    outIsSeq    = false;
+    outErr.clear();
+
+    std::vector<std::string> toks = thk::TokenizeRuleLine(rawLine);
+    if (toks.empty()) return true;
+
+    std::size_t base = 0U;
+    if (base < toks.size() && thk::LowerAscii(toks[base]) == "$rng") ++base;
+    if (base < toks.size() && thk::LowerAscii(toks[base]) == "thk") ++base;
+    if (base >= toks.size()) {
+        outErr = "empty custom command";
+        return false;
+    }
+
+    std::vector<const char*> ptrs;
+    ptrs.reserve(toks.size() - base);
+    for (std::size_t i = base; i < toks.size(); ++i) {
+        ptrs.push_back(toks[i].c_str());
+    }
+    const int argc = static_cast<int>(ptrs.size());
+    const std::string head = thk::LowerAscii(ptrs[0]);
+
+    if (head == "rule" || head == "rules") {
+        if (argc < 6 || thk::LowerAscii(ptrs[1]) != "add") {
+            outErr = "expected `rule add <mon|*> <node> <seg0|*> <tgt> [mods...]`";
+            return false;
+        }
+        if (!ParseRuleTargetBase(ptrs[2], ptrs[3], ptrs[4], ptrs[5], outRule, outErr) ||
+            !ParseCommonModifiers(6, argc, ptrs.data(), outRule, outErr)) {
+            return false;
+        }
+        outCanonCmd = FormatCanonicalCustomCmd("rule add", 2, argc, ptrs.data());
+        outIsSeq    = false;
+        return true;
+    }
+
+    if (head == "seq" || head == "sequence") {
+        if (argc < 5) {
+            outErr = "expected `seq <mon|*> <node> <seg0|*> <t1,t2,...> [mods...]`";
+            return false;
+        }
+        if (!ParseRuleTargetBase(ptrs[1], ptrs[2], ptrs[3], ptrs[4], outRule, outErr) ||
+            !ParseCommonModifiers(5, argc, ptrs.data(), outRule, outErr)) {
+            return false;
+        }
+        outCanonCmd = FormatCanonicalCustomCmd("seq", 1, argc, ptrs.data());
+        outIsSeq    = true;
+        return true;
+    }
+
+    outErr = "unsupported custom THK command `" + std::string(ptrs[0]) + "` (expected `rule add` or `seq`)";
+    return false;
+}
+
+std::uint64_t __fastcall Svc_ThkGetTotalDecisions() {
+    std::lock_guard<std::mutex> lk(g_stateMx);
+    std::uint64_t total = 0ULL;
+    for (const auto& t : g_engine.trackers) {
+        if (t.inUse) total += t.totalDecisions;
+    }
+    return total;
+}
+
+bool __fastcall Svc_ThkGetConfigSnapshot(char*        outPresetName,
+                                         std::size_t  nameCap,
+                                         char*        outPresetSha256,
+                                         std::size_t  shaCap,
+                                         char*        outDisabledTags,
+                                         std::size_t  tagsCap,
+                                         char*        outPresetBody,
+                                         std::size_t  bodyCap,
+                                         std::size_t* outBodyNeed,
+                                         char*        outCustomCmds,
+                                         std::size_t  cmdsCap,
+                                         std::size_t* outCmdsNeed) {
+    std::string presetName;
+    std::string presetSha;
+    std::vector<std::string> tags;
+    std::string presetBody;
+    std::vector<CustomRuleCmdRecord> cmds;
+    {
+        std::lock_guard<std::mutex> lk(g_stateMx);
+        presetName = g_engine.activePresetName;
+        presetSha  = g_activePresetSha256;
+        tags       = g_engine.disabledTags;
+        presetBody = g_activePresetText;
+        cmds       = g_customRuleCmds;
+    }
+
+    std::sort(tags.begin(), tags.end());
+    tags.erase(std::unique(tags.begin(), tags.end()), tags.end());
+    std::string tagsCsv;
+    for (std::size_t i = 0U; i < tags.size(); ++i) {
+        if (i > 0U) tagsCsv.push_back(',');
+        tagsCsv += tags[i];
+    }
+
+    std::string cmdsJoined;
+    for (std::size_t i = 0U; i < cmds.size(); ++i) {
+        if (i > 0U) cmdsJoined.push_back('\n');
+        cmdsJoined += cmds[i].cmdLine;
+    }
+
+    bool ok = true;
+    ok &= WriteCStringExact(outPresetName, nameCap, presetName);
+    ok &= WriteCStringExact(outPresetSha256, shaCap, presetSha);
+    ok &= WriteCStringExact(outDisabledTags, tagsCap, tagsCsv);
+    ok &= WriteProbedString(outPresetBody, bodyCap, outBodyNeed, presetBody);
+    ok &= WriteProbedString(outCustomCmds, cmdsCap, outCmdsNeed, cmdsJoined);
+    return ok;
+}
+
+bool __fastcall Svc_ThkApplyConfig(const char* presetName,
+                                   const char* presetBodyOrNull,
+                                   const char* disabledTagsCsvOrNull,
+                                   const char* customCmdsOrNull,
+                                   char*       outErr,
+                                   std::size_t errCap) {
+    if (outErr && errCap > 0U) outErr[0] = '\0';
+
+    bool hasPreset = false;
+    thk::ThkPresetDocument doc{};
+    std::string rawText;
+    std::string sha256;
+    std::string sourceDesc;
+    std::string err;
+
+    if (presetBodyOrNull && presetBodyOrNull[0] != '\0') {
+        rawText = presetBodyOrNull;
+        std::string fallbackName = (presetName && presetName[0] != '\0')
+                                       ? thk::TrimAscii(presetName)
+                                       : std::string("memory");
+        const std::string lowFb = thk::LowerAscii(fallbackName);
+        if (lowFb.size() > 4U && lowFb.substr(lowFb.size() - 4U) == ".txt") {
+            fallbackName.resize(fallbackName.size() - 4U);
+        }
+        if (fallbackName.empty()) fallbackName = "memory";
+
+        if (!thk::ParsePresetFromText(rawText, fallbackName, doc, err)) {
+            thk::CopyTrunc(outErr, errCap, err.c_str());
+            return false;
+        }
+        if (doc.name.empty()) doc.name = fallbackName;
+        sha256     = thk::Sha256HexLower(rawText);
+        sourceDesc = "memory";
+        hasPreset  = true;
+    } else if (presetName && presetName[0] != '\0') {
+        if (!LoadPresetDocByNameUnlocked(presetName, doc, rawText, sha256, sourceDesc, err)) {
+            thk::CopyTrunc(outErr, errCap, err.c_str());
+            return false;
+        }
+        hasPreset = true;
+    }
+
+    std::vector<std::string> nextDisabledTags;
+    if (disabledTagsCsvOrNull != nullptr) {
+        const std::string csv(disabledTagsCsvOrNull);
+        std::size_t pos = 0U;
+        while (pos <= csv.size()) {
+            const std::size_t comma = csv.find(',', pos);
+            const std::string item  = thk::LowerAscii(thk::TrimAscii(
+                comma == std::string::npos ? csv.substr(pos) : csv.substr(pos, comma - pos)));
+            if (!item.empty() &&
+                std::find(nextDisabledTags.begin(), nextDisabledTags.end(), item) == nextDisabledTags.end()) {
+                nextDisabledTags.push_back(item);
+            }
+            if (comma == std::string::npos) break;
+            pos = comma + 1U;
+        }
+    } else if (hasPreset) {
+        nextDisabledTags = doc.defaultDisabledTags;
+    }
+
+    std::vector<thk::ThkRule>        nextCustomRules;
+    std::vector<CustomRuleCmdRecord> nextCustomCmds;
+    if (customCmdsOrNull && customCmdsOrNull[0] != '\0') {
+        const std::string cmdsStr(customCmdsOrNull);
+        std::size_t pos = 0U;
+        std::size_t lineNo = 0U;
+        while (pos <= cmdsStr.size()) {
+            ++lineNo;
+            const std::size_t nl = cmdsStr.find('\n', pos);
+            std::string line = (nl == std::string::npos) ? cmdsStr.substr(pos) : cmdsStr.substr(pos, nl - pos);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            const std::string trimmed = thk::TrimAscii(line);
+            if (!trimmed.empty() && trimmed[0] != '#' && trimmed[0] != ';') {
+                thk::ThkRule rule{};
+                std::string canonCmd;
+                bool isSeq = false;
+                if (!ParseCustomCmdLineUnlocked(trimmed, rule, canonCmd, isSeq, err)) {
+                    const std::string fullErr = "custom cmd line " + std::to_string(lineNo) + ": " + err;
+                    thk::CopyTrunc(outErr, errCap, fullErr.c_str());
+                    return false;
+                }
+                if (!canonCmd.empty()) {
+                    rule.ruleId = static_cast<std::uint32_t>(nextCustomRules.size() + 1U);
+                    rule.condId = 2000U + rule.ruleId;
+                    if (rule.label[0] == '\0') {
+                        std::snprintf(rule.label, sizeof(rule.label), "%s#%u",
+                                      isSeq ? "seq" : "rule", rule.ruleId);
+                    }
+                    nextCustomRules.push_back(rule);
+                    nextCustomCmds.push_back(CustomRuleCmdRecord{ rule.ruleId, std::move(canonCmd) });
+                }
+            }
+            if (nl == std::string::npos) break;
+            pos = nl + 1U;
+        }
+    }
+
+    bool needInspect = false;
+    {
+        std::lock_guard<std::mutex> lk(g_stateMx);
+        g_engine.activePresetName   = hasPreset ? doc.name : std::string{};
+        g_engine.activePresetDesc   = hasPreset ? doc.desc : std::string{};
+        g_engine.activePresetDescEn = hasPreset ? doc.descEn : std::string{};
+        g_engine.activePresetSource = hasPreset ? sourceDesc : std::string{};
+        g_engine.presetRules        = hasPreset ? std::move(doc.rules) : std::vector<thk::ThkRule>{};
+        g_engine.presetContexts     = hasPreset ? std::move(doc.contexts) : std::vector<thk::ThkNamedContext>{};
+        g_engine.disabledTags       = std::move(nextDisabledTags);
+        g_activePresetText          = hasPreset ? std::move(rawText) : std::string{};
+        g_activePresetSha256        = hasPreset ? std::move(sha256) : std::string{};
+
+        g_engine.customRules        = std::move(nextCustomRules);
+        g_engine.nextCustomRuleId   = static_cast<std::uint32_t>(g_engine.customRules.size() + 1U);
+        g_customRuleCmds            = std::move(nextCustomCmds);
+
+        if (hasPreset && thk::LowerAscii(g_engine.activePresetName) == "fatalis_p1_nasty") {
+            g_fatalisGuards   = !g_engine.IsTagDisabled("guard");
+            g_fatalisFarMulti = !g_engine.IsTagDisabled("far_multi") && g_engine.IsTagDisabled("far_single");
+        }
+
+        g_engine.ResetRuntimeTrackers();
+        needInspect = g_engine.NeedsInspection();
+    }
+
+    if (g_host) {
+        if (!needInspect) {
+            g_host->ClearSlotAllConditions(thk::kRvaThkUpdateRandom);
+        } else if (g_host->GetEngineMode() == kMhwRngModeOff) {
+            g_host->SetTakeoverEnabled(true);
+        }
+    }
+    return true;
+}
+
+const MhwThkServiceApi kThkServiceApi = {
+    sizeof(MhwThkServiceApi),
+    kMhwThkApiVersion,
+    &Svc_ThkGetTotalDecisions,
+    &Svc_ThkGetConfigSnapshot,
+    &Svc_ThkApplyConfig
+};
+
 const MhwRngPluginDescriptor kPluginDesc = {
     kMhwRngApiVersion,
     "thk",
     u8"通用THK随机节点探测与纯RNG控招引擎",
-    "1.4.0",
+    "1.5.0",
     u8"探测任意怪物THK节点、记录出招上下文，并支持门控/权重/序列/上下文化prev与声明式预设"
 };
 
@@ -1310,6 +1671,7 @@ MHW_RNG_PLUGIN_EXPORT bool MhwRngPlugin_Init(const MhwRngHostApi* host, MhwRngPl
     g_worldEvQuestEnter  = MhwRng_HostSubscribeEvent(host, selfId, kMhwWorldEvQuestEnter,  &OnWorldEvent, nullptr);
     g_worldEvQuestLeave  = MhwRng_HostSubscribeEvent(host, selfId, kMhwWorldEvQuestLeave,  &OnWorldEvent, nullptr);
     g_worldEvTitleReturn = MhwRng_HostSubscribeEvent(host, selfId, kMhwWorldEvTitleReturn, &OnWorldEvent, nullptr);
+    MhwRng_HostRegisterService(host, selfId, kMhwThkServiceName, kMhwThkApiVersion, &kThkServiceApi);
     return true;
 }
 
@@ -1330,11 +1692,15 @@ MHW_RNG_PLUGIN_EXPORT void MhwRngPlugin_Shutdown() {
         g_worldEvQuestLeave  = kMhwRngInvalidHandle;
         g_worldEvTitleReturn = kMhwRngInvalidHandle;
         g_engine             = thk::ThkEngine{};
+        g_activePresetText.clear();
+        g_activePresetSha256.clear();
+        g_customRuleCmds.clear();
         g_fatalisFarMulti    = false;
         g_fatalisGuards      = true;
         g_host               = nullptr;
         g_selfId             = 0U;
     }
+    MhwRng_HostUnregisterService(hostCopy, selfCopy, kMhwThkServiceName);
     MhwRng_HostUnsubscribeEvent(hostCopy, selfCopy, ev1);
     MhwRng_HostUnsubscribeEvent(hostCopy, selfCopy, ev2);
     MhwRng_HostUnsubscribeEvent(hostCopy, selfCopy, ev3);

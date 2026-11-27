@@ -198,5 +198,27 @@ int main(int argc, char** argv) {
 
         std::printf("[OK] Context-aware prev_node/prev_seg0/ctx/prev_ctx checks PASSED!\n");
     }
+
+    // 7. Pure-C++ FIPS 180-4 SHA-256 test vectors & LoadPresetFromFile raw-text capture
+    {
+        assert(thk::Sha256HexLower(std::string("")) ==
+               "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert(thk::Sha256HexLower(std::string("abc")) ==
+               "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert(thk::Sha256HexLower(std::string("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")) ==
+               "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+        // Verify exact 55-byte and 64-byte block padding boundaries
+        assert(thk::Sha256HexLower(std::string(55U, 'a')) ==
+               "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318");
+        assert(thk::Sha256HexLower(std::string(64U, 'a')) ==
+               "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb");
+
+        thk::ThkPresetDocument rawDoc{};
+        std::string rawText, rawErr;
+        assert(thk::LoadPresetFromFile(presetPath, "fatalis_sweet", rawDoc, rawErr, &rawText));
+        assert(rawText == oss.str());
+        assert(thk::Sha256HexLower(rawText).size() == 64U);
+        std::printf("[OK] Pure-C++ SHA-256 vectors & LoadPresetFromFile raw text capture PASSED!\n");
+    }
     return 0;
 }
